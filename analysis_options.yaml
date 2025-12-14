@@ -3,6 +3,8 @@ analyzer:
     use_build_context_synchronously: ignore
     deprecated_member_use: ignore
     unnecessary_to_list_in_spreads: ignore
+    invalid_use_of_protected_member: ignore
+    prefer_final_locals: ignore
 include: package:flutter_lints/flutter.yaml
 
 linter:

@@ -453,8 +453,9 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
           ],
         ),
         backgroundColor: Theme.of(context).colorScheme.errorContainer,
-        duration: const Duration(seconds: 4),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 150.0),
         action: SnackBarAction(
           label: 'Retry',
           textColor: Theme.of(context).colorScheme.onErrorContainer,
@@ -774,6 +775,8 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
             ],
           ),
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+          margin: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 150.0),
         ),
       );
     } on GalException catch (e) {
@@ -868,6 +871,8 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
             ],
           ),
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+          margin: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 150.0),
         ),
       );
     } else {
@@ -1004,6 +1009,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
               backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 2),
+              margin: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 150.0),
             ),
           );
         } else {

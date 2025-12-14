@@ -30,6 +30,7 @@ dependencies:
   firebase_auth: ^6.1.2
   image: ^4.0.0
   gal: ^2.3.2
+  cloud_firestore: ^6.1.0
   
   flutter_launcher_icons: ^0.14.4 
 
