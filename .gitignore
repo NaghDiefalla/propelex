@@ -33,6 +33,10 @@ migrate_working_dir/
 .pub/
 /build/
 
+
+**/new_dawn_propelex.jks
+**/key.properties
+
 # Symbolication related
 app.*.symbols
 
