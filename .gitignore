@@ -34,10 +34,11 @@ migrate_working_dir/
 /build/
 
 
+**/firebase_options.dart
+**/google-services.json
+**/ios/Runner/GoogleService-Info.plist
 **/new_dawn_propelex.jks
 **/key.properties
-**/firebase.json
-**/firebase_options.dart
 
 # Symbolication related
 app.*.symbols
