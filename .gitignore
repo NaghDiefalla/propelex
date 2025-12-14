@@ -36,6 +36,8 @@ migrate_working_dir/
 
 **/new_dawn_propelex.jks
 **/key.properties
+**/firebase.json
+**/firebase_options.dart
 
 # Symbolication related
 app.*.symbols
