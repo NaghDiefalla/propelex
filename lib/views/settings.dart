@@ -739,7 +739,7 @@ class SettingsPage extends StatelessWidget {
           // App Info
           Center(
             child: Text(
-              'Quote of the Day v1.0.0',
+              'Propelex v1.0.0',
               style: textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurface.withValues(alpha: 0.5),
               ),

@@ -1143,7 +1143,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Quote of the Day'),
+              const Text('Propelex'),
               if (_streakCount > 0) ...[
                 const SizedBox(width: 12),
                 Text(
@@ -1183,8 +1183,8 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 } else if (v == 'about') {
                   showAboutDialog(
                     context: context,
-                    applicationName: 'Quote of the Day',
-                    applicationVersion: '1.0.0',
+                    applicationName: 'Propelex',
+                    applicationVersion: '0.1.0',
                     applicationIcon: Icon(
                       Icons.format_quote_rounded,
                       size: 48,
@@ -1566,7 +1566,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                       children: [
                         Icon(Icons.auto_awesome, size: 18, color: cs.onSurface.withValues(alpha: 0.6)),
                         const SizedBox(width: 6),
-                        Text('Quote of the Day', style: textTheme.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.6))),
+                        Text('Propelex', style: textTheme.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.6))),
                       ],
                     ),
                   ),
