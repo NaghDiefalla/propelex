@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "579506953146",
+    "project_id": "propelex-1bc84",
+    "storage_bucket": "propelex-1bc84.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:579506953146:android:a92aecbe240d7a49955b83",
+        "android_client_info": {
+          "package_name": "com.newdawnstudio.propelex"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "579506953146-8gvn4vnoetusje9noqvnm2mgkbg7ufua.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmfGAoLRl-v6SLS8seif0QuTu8zwJN1ts"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "579506953146-8gvn4vnoetusje9noqvnm2mgkbg7ufua.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -26,6 +26,8 @@ dependencies:
   file_picker: ^8.1.2
   google_fonts: ^6.2.1
   saver_gallery: ^3.0.6
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.15.2
   
   flutter_launcher_icons: ^0.13.1 
 

@@ -1,4 +1,4 @@
-package com.newdawnstudio.propelex
+package com.newdawncorp.propelex
 
 import io.flutter.embedding.android.FlutterActivity
 
