@@ -6,23 +6,23 @@ import '../views/login.dart';
 
 class AuthController extends GetxController {
   // Use Rx<User?> to observe the current Firebase user state
-  final Rx<User?> _user = FirebaseAuth.instance.currentUser.obs;
-
-  // RxBool for loading state during network calls
+  static AuthController get instance => Get.find();
+  late final Rx<User?> firebaseUser;
   final RxBool isLoading = false.obs;
+
+  final Rx<User?> _user = FirebaseAuth.instance.currentUser.obs;
+  
 
   // Getter to access the stream of user changes
   User? get user => _user.value;
 
   @override
+  @override
   void onReady() {
     super.onReady();
-    // Binds the Firebase Auth state change stream to the _user variable.
-    // This allows GetX to automatically route the user when they log in/out.
-    _user.bindStream(FirebaseAuth.instance.authStateChanges());
-
-    // Listener to handle navigation when the user state changes
-    ever(_user, _initialScreen);
+    firebaseUser = Rx<User?>(FirebaseAuth.instance.currentUser);
+    firebaseUser.bindStream(FirebaseAuth.instance.userChanges());
+    ever(firebaseUser, _initialScreen);
   }
 
   // Handle navigation based on user state

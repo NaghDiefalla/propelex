@@ -752,7 +752,7 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-// Settings section widget for better organization
+
 class _SettingsSection extends StatelessWidget {
   final String title;
   final IconData icon;
