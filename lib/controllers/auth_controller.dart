@@ -5,15 +5,12 @@ import '../views/home.dart';
 import '../views/login.dart';
 
 class AuthController extends GetxController {
-  // Use Rx<User?> to observe the current Firebase user state
   static AuthController get instance => Get.find();
   late final Rx<User?> firebaseUser;
   final RxBool isLoading = false.obs;
 
   final Rx<User?> _user = FirebaseAuth.instance.currentUser.obs;
   
-
-  // Getter to access the stream of user changes
   User? get user => _user.value;
 
   @override

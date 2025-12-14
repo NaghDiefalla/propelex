@@ -1,16 +1,49 @@
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'home.dart';
 import 'login.dart';
+
+// --- API Definitions ---
+enum QuoteApiSource { zenquotes, quotegarden, apininjas, typefitLocal }
+
+class ApiSource {
+  final QuoteApiSource id;
+  final String name;
+  final String url;
+  final String description;
+
+  const ApiSource(this.id, this.name, this.url, this.description);
+}
+
+const List<ApiSource> availableApis = [
+  ApiSource(
+    QuoteApiSource.zenquotes,
+    'ZenQuotes.io (Default)',
+    'https://zenquotes.io/api/random',
+    'Simple, widely used. May experience occasional outages/rate limits.',
+  ),
+  ApiSource(
+    QuoteApiSource.quotegarden,
+    'QuoteGarden',
+    'https://quote-garden.herokuapp.com/api/v3/quotes/random',
+    'Clean JSON format. Reliable secondary source.',
+  ),
+  ApiSource(
+    QuoteApiSource.typefitLocal,
+    'Local Quotes (Static File)',
+    'LOCAL_TYPEFIT', // Flag for local processing in home.dart
+    'Uses a large local JSON file (Type.fit) for fast, reliable, and offline quotes.',
+  ),
+];
+// --- End API Definitions ---
 
 class SettingsPage extends StatelessWidget {
   final HomePageState homeState;
@@ -58,79 +91,148 @@ class SettingsPage extends StatelessWidget {
     }
   }
 
-  Future<void> _testNotification(BuildContext context) async {
+  String _formatTime(BuildContext context, String hhmm) {
     try {
-      const androidDetails = AndroidNotificationDetails(
-        'quote_channel',
-        'Quote of the Day',
-        importance: Importance.high,
-        priority: Priority.high,
-        styleInformation: BigTextStyleInformation(''),
-        showWhen: true,
-      );
-      const platformDetails = NotificationDetails(android: androidDetails);
+      final parts = hhmm.split(':');
+      if (parts.length != 2) return hhmm;
+      final hour = int.tryParse(parts[0]);
+      final minute = int.tryParse(parts[1]);
+      if (hour == null || minute == null) return hhmm;
+      final time = TimeOfDay(hour: hour, minute: minute);
+      return time.format(context); 
+    } catch (_) {
+      return hhmm;
+    }
+}
 
-      final now = tz.TZDateTime.now(tz.local);
-      final scheduledTime = now.add(const Duration(seconds: 10));
-      final quote = homeState.currentQuote;
-      final notificationText = quote != null
-          ? '${quote.content}\n- ${quote.author}'
-          : 'Test notification: No quote available';
+Future<String> _getFormattedNotificationTime(BuildContext context) async {
+  final prefs = await SharedPreferences.getInstance();
+  final timeString = prefs.getString('notification_time') ?? '08:00';
+  
+  // Use the existing _formatTime helper (which you need to ensure is present 
+  // in SettingsPage, as provided in the last response)
+  return _formatTime(context, timeString);
+}
 
-      final status = await Permission.scheduleExactAlarm.request();
-      debugPrint('Exact alarm permission status: $status');
-      if (status.isPermanentlyDenied) {
-        if (context.mounted) {
-          await showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Permission Required'),
-              content: const Text('Please enable exact alarm permission in system settings to allow precise notifications.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    await openAppSettings();
-                  },
-                  child: const Text('Open Settings'),
-                ),
-              ],
-            ),
+  // Future<void> _testNotification(BuildContext context) async {
+  //   try {
+  //     const androidDetails = AndroidNotificationDetails(
+  //       'quote_channel',
+  //       'Quote of the Day',
+  //       importance: Importance.high,
+  //       priority: Priority.high,
+  //       styleInformation: BigTextStyleInformation(''),
+  //       showWhen: true,
+  //     );
+  //     const platformDetails = NotificationDetails(android: androidDetails);
+
+  //     final now = tz.TZDateTime.now(tz.local);
+  //     final scheduledTime = now.add(const Duration(seconds: 10));
+  //     final quote = homeState.currentQuote;
+  //     final notificationText = quote != null
+  //         ? '${quote.content}\n- ${quote.author}'
+  //         : 'Test notification: No quote available';
+
+  //     final status = await Permission.scheduleExactAlarm.request();
+  //     debugPrint('Exact alarm permission status: $status');
+  //     if (status.isPermanentlyDenied) {
+  //       if (context.mounted) {
+  //         await showDialog(
+  //           context: context,
+  //           builder: (context) => AlertDialog(
+  //             title: const Text('Permission Required'),
+  //             content: const Text('Please enable exact alarm permission in system settings to allow precise notifications.'),
+  //             actions: [
+  //               TextButton(
+  //                 onPressed: () => Navigator.pop(context),
+  //                 child: const Text('Cancel'),
+  //               ),
+  //               TextButton(
+  //                 onPressed: () async {
+  //                   Navigator.pop(context);
+  //                   await openAppSettings();
+  //                 },
+  //                 child: const Text('Open Settings'),
+  //               ),
+  //             ],
+  //           ),
+  //         );
+  //       }
+  //       return;
+  //     }
+
+  //     bool useExact = status.isGranted;
+  //     await FlutterLocalNotificationsPlugin().zonedSchedule(
+  //       999,
+  //       'Test Notification',
+  //       notificationText,
+  //       scheduledTime,
+  //       platformDetails,
+  //       androidScheduleMode: useExact
+  //           ? AndroidScheduleMode.exactAllowWhileIdle
+  //           : AndroidScheduleMode.inexactAllowWhileIdle,
+  //       payload: 'test_notification',
+  //     );
+
+  //     if (context.mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Text('Test notification scheduled (check in 10 seconds, ${useExact ? 'exact' : 'inexact'} timing)'),
+  //         ),
+  //       );
+  //     }
+  //     debugPrint('Test notification scheduled for: $scheduledTime (exact: $useExact)');
+  //   } catch (e) {
+  //     debugPrint('Error scheduling test notification: $e');
+  //     if (context.mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text('Failed to schedule test notification')),
+  //       );
+  //     }
+  //   }
+  // }
+
+  Future<void> _selectApiSource(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Default to 'zenquotes' if not set
+    final currentApiName = prefs.getString('api_source_name') ?? QuoteApiSource.zenquotes.name;
+
+    final selectedApi = await showDialog<ApiSource>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Select Quote API Source'),
+        children: availableApis.map((api) {
+          return RadioListTile<QuoteApiSource>(
+            title: Text(api.name),
+            subtitle: Text(api.description),
+            value: api.id,
+            groupValue: availableApis
+                .firstWhere((e) => e.id.name == currentApiName)
+                .id,
+            onChanged: (v) => Navigator.pop(ctx, api),
           );
-        }
-        return;
-      }
+        }).toList(),
+      ),
+    );
 
-      bool useExact = status.isGranted;
-      await FlutterLocalNotificationsPlugin().zonedSchedule(
-        999,
-        'Test Notification',
-        notificationText,
-        scheduledTime,
-        platformDetails,
-        androidScheduleMode: useExact
-            ? AndroidScheduleMode.exactAllowWhileIdle
-            : AndroidScheduleMode.inexactAllowWhileIdle,
-        payload: 'test_notification',
-      );
+    if (selectedApi != null) {
+      // Call the method in HomePageState to update the API, save prefs, and fetch a new quote
+      await homeState.updateApiSource(selectedApi.id.name, selectedApi.url);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Test notification scheduled (check in 10 seconds, ${useExact ? 'exact' : 'inexact'} timing)'),
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded, size: 20, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                const SizedBox(width: 12),
+                Text('API source set to ${selectedApi.name}'),
+              ],
+            ),
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
           ),
-        );
-      }
-      debugPrint('Test notification scheduled for: $scheduledTime (exact: $useExact)');
-    } catch (e) {
-      debugPrint('Error scheduling test notification: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to schedule test notification')),
         );
       }
     }
@@ -198,6 +300,8 @@ class SettingsPage extends StatelessWidget {
       'theme_mode': prefs.getString('theme_mode'),
       'is_logged_in': prefs.getBool('is_logged_in'),
       'username': prefs.getString('username'),
+      'api_source_name': prefs.getString('api_source_name'), // Export new API setting
+      'api_source_url': prefs.getString('api_source_url'),   // Export new API setting
     };
     final tmp = await getTemporaryDirectory();
     final file = File('${tmp.path}/quotes_backup_${DateTime.now().millisecondsSinceEpoch}.json');
@@ -316,6 +420,9 @@ class SettingsPage extends StatelessWidget {
     await prefs.remove('quote_ratings');
     await prefs.remove('streak_count');
     await prefs.remove('last_opened');
+    await prefs.remove('api_source_name');
+    await prefs.remove('api_source_url');
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -350,90 +457,76 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20.0),
         children: [
-          // Notifications Section
+          // --- New: API Source Section ---
           _SettingsSection(
-            title: 'Notifications',
-            icon: Icons.notifications_outlined,
+            title: 'Quote Source',
+            icon: Icons.cloud_queue_rounded,
             children: [
               Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: 0.1),
+                    color: colorScheme.outline.withValues(alpha: .1),
                   ),
                 ),
-                child: SwitchListTile(
-                  title: const Text('Enable Daily Notifications'),
-                  subtitle: Text(
-                    'Receive a quote notification every day',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.api_rounded,
+                      color: colorScheme.onTertiaryContainer,
+                      size: 20,
                     ),
                   ),
-                  value: homeState.enableNotifications,
-                  onChanged: (value) async {
-                    try {
-                      await homeState.updateNotifications(value);
-                      debugPrint('Notifications toggled: $value');
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                Icon(
-                                  value ? Icons.check_circle_outline_rounded : Icons.notifications_off_outlined,
-                                  size: 20,
-                                  color: colorScheme.onPrimaryContainer,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  value ? 'Notifications enabled' : 'Notifications disabled',
-                                  style: TextStyle(
-                                    color: colorScheme.onPrimaryContainer,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: colorScheme.primaryContainer,
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      debugPrint('Error updating notifications: $e');
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                Icon(
-                                  Icons.error_outline_rounded,
-                                  size: 20,
-                                  color: colorScheme.onErrorContainer,
-                                ),
-                                const SizedBox(width: 12),
-                                const Text('Failed to update notification settings'),
-                              ],
-                            ),
-                            backgroundColor: colorScheme.errorContainer,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  title: const Text('Select Quote API'),
+                  subtitle: FutureBuilder<String>(
+                    future: SharedPreferences.getInstance().then(
+                      // Default to zenquotes name
+                      (prefs) => prefs.getString('api_source_name') ?? QuoteApiSource.zenquotes.name,
+                    ),
+                    builder: (context, snapshot) {
+                      final currentId = snapshot.data ?? QuoteApiSource.zenquotes.name;
+                      final currentApi = availableApis.firstWhere(
+                            (api) => api.id.name == currentId,
+                        orElse: () => availableApis.first,
+                      );
+                      return Text(
+                        'Currently using ${currentApi.name}',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurface.withValues(alpha: .6),
+                        ),
+                      );
+                    },
+                  ),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    color: colorScheme.onSurface.withValues(alpha: .4),
+                  ),
+                  onTap: () => _selectApiSource(context),
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          // --- End API Source Section ---
+
+          // Notifications Section
+          _SettingsSection(
+            title: 'Notifications',
+            icon: Icons.notifications_outlined,
+            children: [
               const SizedBox(height: 12),
               Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: 0.1),
+                    color: colorScheme.outline.withValues(alpha: .1),
                   ),
                 ),
                 child: ListTile(
@@ -449,64 +542,66 @@ class SettingsPage extends StatelessWidget {
                       size: 20,
                     ),
                   ),
-                  title: const Text('Notification Time'),
+                  title: const Text('Notification Time'), // More descriptive title
                   subtitle: FutureBuilder<String>(
-                    future: SharedPreferences.getInstance().then(
-                      (prefs) => prefs.getString('notification_time') ?? '08:00',
-                    ),
+                    // Use the clean, dedicated function
+                    future: _getFormattedNotificationTime(context), 
                     builder: (context, snapshot) {
-                      final time = snapshot.data ?? '08:00';
+                      // Show loading indicator or default value while waiting
+                      final timeText = snapshot.data ?? 'Loading...'; 
+                      
                       return Text(
-                        'Daily quote at $time',
+                        // Use the formatted string directly
+                        'Quote scheduled for $timeText',
                         style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: colorScheme.onSurface.withValues(alpha: .6),
                         ),
                       );
                     },
                   ),
                   trailing: Icon(
                     Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: .4),
                   ),
                   onTap: () => _setNotificationTime(context),
                 ),
               ),
               const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.notifications_active_rounded,
-                      color: colorScheme.onSecondaryContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text('Test Notification'),
-                  subtitle: Text(
-                    'Send a test notification in 10 seconds',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                  onTap: () => _testNotification(context),
-                ),
-              ),
+              // Card(
+              //   elevation: 0,
+              //   shape: RoundedRectangleBorder(
+              //     borderRadius: BorderRadius.circular(16),
+              //     side: BorderSide(
+              //       color: colorScheme.outline.withValues(alpha: .1),
+              //     ),
+              //   ),
+              //   child: ListTile(
+              //     leading: Container(
+              //       padding: const EdgeInsets.all(8),
+              //       decoration: BoxDecoration(
+              //         color: colorScheme.secondaryContainer,
+              //         borderRadius: BorderRadius.circular(10),
+              //       ),
+              //       child: Icon(
+              //         Icons.notifications_active_rounded,
+              //         color: colorScheme.onSecondaryContainer,
+              //         size: 20,
+              //       ),
+              //     ),
+              //     title: const Text('Test Notification'),
+              //     subtitle: Text(
+              //       'Send a test notification in 10 seconds',
+              //       style: textTheme.bodySmall?.copyWith(
+              //         color: colorScheme.onSurface.withValues(alpha: .6),
+              //       ),
+              //     ),
+              //     trailing: Icon(
+              //       Icons.chevron_right_rounded,
+              //       color: colorScheme.onSurface.withValues(alpha: .4),
+              //     ),
+              //     onTap: () => _testNotification(context),
+              //   ),
+              // ),
             ],
           ),
           const SizedBox(height: 32),
@@ -520,7 +615,7 @@ class SettingsPage extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: 0.1),
+                    color: colorScheme.outline.withValues(alpha: .1),
                   ),
                 ),
                 child: ListTile(
@@ -551,14 +646,14 @@ class SettingsPage extends StatelessWidget {
                       return Text(
                         modeText,
                         style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: colorScheme.onSurface.withValues(alpha: .6),
                         ),
                       );
                     },
                   ),
                   trailing: Icon(
                     Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: .4),
                   ),
                   onTap: () => _selectThemeMode(context),
                 ),
@@ -576,7 +671,7 @@ class SettingsPage extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: 0.1),
+                    color: colorScheme.outline.withValues(alpha: .1),
                   ),
                 ),
                 child: ListTile(
@@ -596,12 +691,12 @@ class SettingsPage extends StatelessWidget {
                   subtitle: Text(
                     'Backup all quotes, favorites, and settings',
                     style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: colorScheme.onSurface.withValues(alpha: .6),
                     ),
                   ),
                   trailing: Icon(
                     Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: .4),
                   ),
                   onTap: () => _exportData(context),
                 ),
@@ -612,7 +707,7 @@ class SettingsPage extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: 0.1),
+                    color: colorScheme.outline.withValues(alpha: .1),
                   ),
                 ),
                 child: ListTile(
@@ -632,12 +727,12 @@ class SettingsPage extends StatelessWidget {
                   subtitle: Text(
                     'Restore from a backup JSON file',
                     style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: colorScheme.onSurface.withValues(alpha: .6),
                     ),
                   ),
                   trailing: Icon(
                     Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: .4),
                   ),
                   onTap: () => _importData(context),
                 ),
@@ -648,7 +743,7 @@ class SettingsPage extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: colorScheme.error.withValues(alpha: 0.3),
+                    color: colorScheme.error.withValues(alpha: .3),
                   ),
                 ),
                 child: ListTile(
@@ -674,7 +769,7 @@ class SettingsPage extends StatelessWidget {
                   subtitle: Text(
                     'Remove history, favorites, ratings, and cache',
                     style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: colorScheme.onSurface.withValues(alpha: .6),
                     ),
                   ),
                   trailing: Icon(
@@ -697,7 +792,7 @@ class SettingsPage extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: colorScheme.error.withValues(alpha: 0.3),
+                    color: colorScheme.error.withValues(alpha: .3),
                   ),
                 ),
                 child: ListTile(
@@ -723,7 +818,7 @@ class SettingsPage extends StatelessWidget {
                   subtitle: Text(
                     'Log out of your account',
                     style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: colorScheme.onSurface.withValues(alpha: .7),
                     ),
                   ),
                   trailing: Icon(
@@ -741,7 +836,7 @@ class SettingsPage extends StatelessWidget {
             child: Text(
               'Propelex v1.0.0',
               style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: 0.5),
+                color: colorScheme.onSurface.withValues(alpha: .7),
               ),
             ),
           ),

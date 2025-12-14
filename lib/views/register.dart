@@ -53,8 +53,8 @@ class RegistrationPageState extends State<RegistrationPage> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Theme.of(context).colorScheme.primary.withOpacity(0.04),
-                        Theme.of(context).colorScheme.secondary.withOpacity(0.04),
+                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.04),
+                        Theme.of(context).colorScheme.secondary.withValues(alpha: 0.04),
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,

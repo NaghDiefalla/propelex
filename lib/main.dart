@@ -10,8 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'controllers/auth_controller.dart'; // 🎯 Import the new controller
 
-import 'views/login.dart';
-import 'views/home.dart';
 import 'themes/app_theme.dart';
 
 void main() async {
@@ -63,6 +61,8 @@ void main() async {
       themeMode: initialThemeMode,
     ));
   }, (error, stack) {
-    print('Uncaught error: $error');
+    // FIX: Use debugPrint instead of print to avoid dart:avoid_print warning
+    // debugPrint is typically disabled in release builds.
+    debugPrint('Uncaught error: $error\nStack trace: $stack');
   });
 }

@@ -11,39 +11,46 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.2
+  cupertino_icons: ^1.0.8
   http: ^1.5.0
   shared_preferences: ^2.0.20
-  get:
+  get: ^4.7.3
   flutter_local_notifications: ^19.4.2
   timezone: ^0.10.1
   flutter_speed_dial: ^7.0.0
-  share_plus: ^7.0.0
-  connectivity_plus: ^6.0.0
+  share_plus: ^12.0.1
+  connectivity_plus: ^7.0.0
   provider: ^6.0.0
   path_provider: ^2.0.0
-  permission_handler: ^11.3.1
-  file_picker: ^8.1.2
+  permission_handler: ^12.0.1
+  file_picker: ^10.3.7
   google_fonts: ^6.2.1
-  saver_gallery: ^3.0.6
-  firebase_core: ^2.24.2
-  firebase_auth: ^4.15.2
+  saver_gallery: ^4.1.0
+  firebase_core: ^4.2.1
+  firebase_auth: ^6.1.2
+  image: ^4.0.0
+  gal: ^2.3.2
   
-  flutter_launcher_icons: ^0.13.1 
+  flutter_launcher_icons: ^0.14.4 
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
     
   change_app_package_name: ^1.1.0
-    
   flutter_lints: ^6.0.0
 
 flutter_launcher_icons:
-  android: true                     
-  ios: true                         
+  android: true
+  ios: true
   image_path: "assets/icons/logo.png"
+  
+  adaptive_icon_background: "#121212" 
+  adaptive_icon_foreground: "assets/icons/logo.png"
 
+dependency_overrides:
+  http: ^1.5.0
+  
 # The following section is specific to Flutter packages.
 flutter:
 

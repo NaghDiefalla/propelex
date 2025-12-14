@@ -5,49 +5,49 @@ class AppTheme {
   static ThemeData _base(Color seed, Brightness brightness) {
     // Minimal shadcn-style color scheme: black, white, and grays
     final colorScheme = brightness == Brightness.dark
-        ? ColorScheme.dark(
+        ? const ColorScheme.dark(
             primary: Colors.white, // Pure white for accents
             onPrimary: Colors.black,
-            primaryContainer: const Color(0xFF262626), // Neutral gray
+            primaryContainer:  Color(0xFF262626), // Neutral gray
             onPrimaryContainer: Colors.white,
-            secondary: const Color(0xFF737373), // Medium gray
+            secondary:  Color(0xFF737373), // Medium gray
             onSecondary: Colors.white,
-            secondaryContainer: const Color(0xFF404040),
+            secondaryContainer:  Color(0xFF404040),
             onSecondaryContainer: Colors.white,
-            tertiary: const Color(0xFF525252), // Dark gray
+            tertiary:  Color(0xFF525252), // Dark gray
             onTertiary: Colors.white,
-            error: const Color(0xFFDC2626), // Red
+            error:  Color(0xFFDC2626), // Red
             onError: Colors.white,
-            errorContainer: const Color(0xFF7F1D1D),
-            onErrorContainer: const Color(0xFFFEE2E2),
+            errorContainer:  Color(0xFF7F1D1D),
+            onErrorContainer:  Color(0xFFFEE2E2),
             surface: Colors.black, // Pure black
             onSurface: Colors.white, // Pure white text
-            surfaceContainerHighest: const Color(0xFF171717), // Near black
-            outline: const Color(0xFF404040), // Subtle border
-            outlineVariant: const Color(0xFF262626),
+            surfaceContainerHighest:  Color(0xFF171717), // Near black
+            outline:  Color(0xFF404040), // Subtle border
+            outlineVariant:  Color(0xFF262626),
             inverseSurface: Colors.white,
             onInverseSurface: Colors.black,
           )
-        : ColorScheme.light(
+        : const ColorScheme.light(
             primary: Colors.black, // Pure black for accents
             onPrimary: Colors.white,
-            primaryContainer: const Color(0xFFFAFAFA), // Off-white
+            primaryContainer:  Color(0xFFFAFAFA), // Off-white
             onPrimaryContainer: Colors.black,
-            secondary: const Color(0xFF737373), // Medium gray
+            secondary:  Color(0xFF737373), // Medium gray
             onSecondary: Colors.white,
-            secondaryContainer: const Color(0xFFF5F5F5),
+            secondaryContainer:  Color(0xFFF5F5F5),
             onSecondaryContainer: Colors.black,
-            tertiary: const Color(0xFFA3A3A3), // Light gray
+            tertiary:  Color(0xFFA3A3A3), // Light gray
             onTertiary: Colors.white,
-            error: const Color(0xFFDC2626),
+            error:  Color(0xFFDC2626),
             onError: Colors.white,
-            errorContainer: const Color(0xFFFEE2E2),
-            onErrorContainer: const Color(0xFF991B1B),
+            errorContainer:  Color(0xFFFEE2E2),
+            onErrorContainer:  Color(0xFF991B1B),
             surface: Colors.white, // Pure white
             onSurface: Colors.black, // Pure black text
-            surfaceContainerHighest: const Color(0xFFFAFAFA), // Off-white
-            outline: const Color(0xFFE5E5E5), // Very light gray border
-            outlineVariant: const Color(0xFFF5F5F5),
+            surfaceContainerHighest:  Color(0xFFFAFAFA), // Off-white
+            outline:  Color(0xFFE5E5E5), // Very light gray border
+            outlineVariant:  Color(0xFFF5F5F5),
             inverseSurface: Colors.black,
             onInverseSurface: Colors.white,
           );

@@ -1,38 +1,66 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:saver_gallery/saver_gallery.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:gal/gal.dart';
 
 import 'login.dart';
 import 'search.dart';
 import 'settings.dart';
 
 class Quote {
-  final String id;
+final String id;
   final String content;
   final String author;
 
   Quote({required this.id, required this.content, required this.author});
 
-  factory Quote.fromJson(Map<String, dynamic> json) => Quote(
-    id: json['_id'] as String? ?? DateTime.now().toIso8601String(),
-    content: json['q'] as String? ?? 'No quote available',
-    author: json['a'] as String? ?? 'Unknown',
-  );
+  // --- COMPREHENSIVE FACTORY CONSTRUCTOR ---
+  factory Quote.fromJson(Map<String, dynamic> json, {String source = 'zenquotes'}) {
+    String? content;
+    String? author;
+
+    // Determine parsing based on the expected source format
+    if (source == QuoteApiSource.zenquotes.name) {
+      // ZenQuotes format: [{"q": "content", "a": "author"}]
+      content = json['q'] as String?;
+      author = json['a'] as String?;
+    } else if (source == QuoteApiSource.quotegarden.name) {
+      // QuoteGarden format (inner object of the data array): {"quoteText": "content", "quoteAuthor": "author"}
+      content = json['quoteText'] as String?;
+      author = json['quoteAuthor'] as String?;
+    } else if (source == QuoteApiSource.typefitLocal.name) {
+      // Type.fit format: {"text": "content", "author": "author"}
+      content = json['text'] as String?;
+      author = json['author'] as String?;
+    }
+
+    // Fallback logic
+    content ??= 'No quote available';
+    author ??= 'Unknown';
+
+    // Ensure ID is unique, especially for quotes without an original ID
+    final idValue = json['_id'] as String? ?? DateTime.now().microsecondsSinceEpoch.toString();
+
+    return Quote(
+      id: idValue,
+      content: content.trim(),
+      author: author.replaceAll(', type.fit', '').trim().replaceAll(RegExp(r'\s+'), ' '), // Clean up Type.fit author
+    );
+  }
 
   Map<String, dynamic> toJson() => {'_id': id, 'q': content, 'a': author};
 }
@@ -44,8 +72,10 @@ class HomePage extends StatefulWidget {
 }
 
 class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
-  static const _quoteApiUrl = 'https://zenquotes.io/api/random';
+  static const _defaultApiSource = QuoteApiSource.zenquotes;
+  static const _zenQuotesUrl = 'https://zenquotes.io/api/random';
   static const List<Map<String, String>> _fallbackQuotes = [
+    // ... (Your fallback quotes remain here)
     {'q': 'The only limit to our realization of tomorrow is our doubts of today.', 'a': 'Franklin D. Roosevelt'},
     {'q': 'In the middle of difficulty lies opportunity.', 'a': 'Albert Einstein'},
     {'q': 'What you get by achieving your goals is not as important as what you become by achieving your goals.', 'a': 'Zig Ziglar'},
@@ -63,9 +93,15 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   static const _notificationChannelId = 'quote_channel';
   static const _notificationChannelName = 'Quote of the Day';
 
+  // --- NEW STATE VARIABLES FOR API MANAGEMENT ---
+  String _currentApiSourceName = _defaultApiSource.name;
+  String _currentApiSourceUrl = _zenQuotesUrl;
+  List<Quote>? _localTypefitQuotes; // Cache for local quotes
+
+  // --- EXISTING STATE VARIABLES ---
   Quote? _currentQuote;
   bool _isLoading = false;
-  bool _isOffline = false;
+  final bool _isOffline = false;
   DateTime? _lastPressed;
   List<Quote> _quoteHistory = [];
   List<Quote> _favorites = [];
@@ -78,7 +114,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   late Animation<double> _fadeAnimation;
   final GlobalKey _quoteCardKey = GlobalKey();
   final GlobalKey _exportCardKey = GlobalKey();
-  bool _showExportWidget = false;
 
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
@@ -101,6 +136,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
       _initializeTimeZone(),
       _getSavedData(),
       _loadRatings(),
+      _loadApiSettings(), // NEW: Load API settings on startup
       _updateStreak(),
     ]);
     final prefs = await SharedPreferences.getInstance();
@@ -174,47 +210,152 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     await prefs.setString('quote_ratings', jsonEncode(_quoteRatings));
     setState(() {});
   }
+  
+  // --- NEW: API SETTINGS LOADING ---
+  Future<void> _loadApiSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      // Restore saved API or use default
+      _currentApiSourceName = prefs.getString('api_source_name') ?? _defaultApiSource.name;
+      _currentApiSourceUrl = prefs.getString('api_source_url') ?? _zenQuotesUrl;
+    });
+
+    // Pre-load the local JSON if Type.fit is the selected or default API
+    if (_currentApiSourceName == QuoteApiSource.typefitLocal.name) {
+      await _loadLocalTypefitQuotes();
+    }
+  }
+
+  // --- NEW: Local Type.fit Quote Loader ---
+  Future<void> _loadLocalTypefitQuotes() async {
+    try {
+      final jsonString = await rootBundle.loadString('assets/quotes.json'); // Assumes 'assets/quotes.json' exists
+      final List<dynamic> jsonList = jsonDecode(jsonString);
+      _localTypefitQuotes = jsonList
+          .map((e) => Quote.fromJson(e as Map<String, dynamic>, source: QuoteApiSource.typefitLocal.name))
+          .toList();
+      debugPrint('Loaded ${_localTypefitQuotes!.length} local quotes.');
+    } catch (e) {
+      debugPrint('Error loading local Type.fit quotes: $e');
+      _localTypefitQuotes = [];
+    }
+  }
+
+  Future<void> updateApiSource(String name, String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('api_source_name', name);
+    await prefs.setString('api_source_url', url);
+
+    setState(() {
+      _currentApiSourceName = name;
+      _currentApiSourceUrl = url;
+      _localTypefitQuotes = null; // Clear cache
+    });
+
+    if (name == QuoteApiSource.typefitLocal.name) {
+      await _loadLocalTypefitQuotes();
+    }
+    // Fetch a new quote from the newly selected API
+    await _getQuote();
+  }
 
   Future<void> _getQuote({int retryCount = 0}) async {
     if (_isLoading) return;
     setState(() { _isLoading = true; _animationController.reset(); });
+
+    Quote? newQuote;
     try {
-      final resp = await http.get(Uri.parse(_quoteApiUrl)).timeout(const Duration(seconds: 10), onTimeout: () => http.Response('timeout', 408));
-      if (resp.statusCode != 200) {
+      final currentSource = _currentApiSourceName;
+      final currentUrl = _currentApiSourceUrl;
+
+      if (currentSource == QuoteApiSource.typefitLocal.name) {
+        // --- 1. LOCAL QUOTE FETCHING ---
+        if (_localTypefitQuotes == null || _localTypefitQuotes!.isEmpty) {
+          await _loadLocalTypefitQuotes();
+        }
+        if (_localTypefitQuotes!.isNotEmpty) {
+          final random = Random();
+          newQuote = _localTypefitQuotes![random.nextInt(_localTypefitQuotes!.length)];
+        } else {
+          _showError('Local quote file not found or empty.');
+        }
+
+      } else {
+        // --- 2. REMOTE API FETCHING ---
+        final resp = await http.get(Uri.parse(currentUrl)).timeout(const Duration(seconds: 10), onTimeout: () => http.Response('timeout', 408));
+
+        if (resp.statusCode != 200) {
+          if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
+          // Fallback on HTTP error
+          final fb = (_fallbackQuotes..shuffle()).first;
+          newQuote = Quote.fromJson({'q': fb['q'], 'a': fb['a'], '_id': DateTime.now().toIso8601String()});
+        } else {
+          // Attempt to parse the response
+          dynamic data;
+          try { data = jsonDecode(resp.body); } catch (_) {
+            if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
+            _showError('Failed to parse quote response from $currentSource.');
+            return;
+          }
+
+          // Normalize data structure for Quote.fromJson
+          Map<String, dynamic> quoteJson;
+
+          if (currentSource == QuoteApiSource.zenquotes.name) {
+            // ZenQuotes returns a list: [{"q":..., "a":...}]
+            if (data is List && data.isNotEmpty && data.first is Map) {
+              quoteJson = data.first as Map<String, dynamic>;
+            } else {
+              if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
+              _showError('Invalid ZenQuotes data structure.');
+              return;
+            }
+          } else if (currentSource == QuoteApiSource.quotegarden.name) {
+            // QuoteGarden returns: {"data": [{"quoteText":..., "quoteAuthor":...}, ...]}
+            if (data is Map && data['data'] is List && (data['data'] as List).isNotEmpty && (data['data'] as List).first is Map) {
+              quoteJson = (data['data'] as List).first as Map<String, dynamic>;
+            } else {
+              if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
+              _showError('Invalid QuoteGarden data structure.');
+              return;
+            }
+          } else {
+            // If API not recognized, use fallback after max retries
+            if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
+            _showError('Unknown API source configuration.');
+            return;
+          }
+
+          newQuote = Quote.fromJson(quoteJson, source: currentSource);
+        }
+      }
+
+      // --- 3. FINAL PROCESSING ---
+      if (newQuote != null && newQuote.content.isNotEmpty) {
+        setState(() { _currentQuote = newQuote; _animationController.forward(); });
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('quote', jsonEncode(newQuote.toJson()));
+        await prefs.setString('last_notification', DateTime.now().toIso8601String());
+
+        if (!_quoteHistory.any((q) => q.id == newQuote!.id)) {
+          _quoteHistory.add(newQuote);
+          if (_quoteHistory.length > 50) _quoteHistory.removeAt(0);
+          await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((q) => q.toJson()).toList()));
+        }
+
+        if (_enableNotifications) { await _scheduleNotification(newQuote.content, newQuote.author); }
+      } else {
+        // If the newQuote is null or empty after all attempts (including fallback logic)
         if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
-        final fb = (_fallbackQuotes..shuffle()).first;
-        setState(() { _currentQuote = Quote.fromJson({'q': fb['q'], 'a': fb['a'], '_id': DateTime.now().toIso8601String()}); _animationController.forward(); });
-        return;
+        _showError('Could not fetch or parse any quote data.');
       }
-      dynamic data;
-      try { data = jsonDecode(resp.body); } catch (_) {
-        if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
-        final fb = (_fallbackQuotes..shuffle()).first;
-        setState(() { _currentQuote = Quote.fromJson({'q': fb['q'], 'a': fb['a'], '_id': DateTime.now().toIso8601String()}); _animationController.forward(); });
-        return;
-      }
-      if (data is! List || data.isEmpty || data.first is! Map) {
-        if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
-        final fb = (_fallbackQuotes..shuffle()).first;
-        setState(() { _currentQuote = Quote.fromJson({'q': fb['q'], 'a': fb['a'], '_id': DateTime.now().toIso8601String()}); _animationController.forward(); });
-        return;
-      }
-      final newQuote = Quote.fromJson(data.first as Map<String, dynamic>);
-      if (newQuote.content.isEmpty || newQuote.author.isEmpty) {
-        if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
-        _showError('Invalid quote data');
-        return;
-      }
-      setState(() { _currentQuote = newQuote; _animationController.forward(); });
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('quote', jsonEncode(newQuote.toJson()));
-      await prefs.setString('last_notification', DateTime.now().toIso8601String());
-      if (!_quoteHistory.any((q) => q.id == newQuote.id)) {
-        _quoteHistory.add(newQuote);
-        if (_quoteHistory.length > 50) _quoteHistory.removeAt(0);
-        await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((q) => q.toJson()).toList()));
-      }
-      if (_enableNotifications) { await _scheduleNotification(newQuote.content, newQuote.author); }
+    } catch (e) {
+      debugPrint('General fetch error: $e');
+      if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
+      final fb = (_fallbackQuotes..shuffle()).first;
+      setState(() { _currentQuote = Quote.fromJson({'q': fb['q'], 'a': fb['a'], '_id': DateTime.now().toIso8601String()}); _animationController.forward(); });
+      _showError('A network error occurred. Displaying a fallback quote.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -228,7 +369,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     final scheduled = _nextInstanceOfTime(_notificationTime);
     try {
       final useExact = await _requestExactAlarmPermission();
-      await _notificationsPlugin.zonedSchedule(_notificationId, 'Quote of the Day', '$quote\n- $author', scheduled, details, androidScheduleMode: useExact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle, payload: 'daily_quote');
+      await _notificationsPlugin.zonedSchedule(_notificationId, 'Propelex', '$quote\n- $author', scheduled, details, androidScheduleMode: useExact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle, payload: 'daily_quote');
     } catch (_) { _showError('Failed to schedule daily notification'); }
   }
 
@@ -310,30 +451,33 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   }
 
   Future<void> _addCustomQuote() async {
-    final quoteController = TextEditingController();
-    final authorController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
+  final quoteController = TextEditingController();
+  final authorController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
 
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              Icons.add_circle_outline_rounded,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 12),
-            const Text('Add Custom Quote'),
-          ],
-        ),
-        content: Form(
+  await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      title: Row(
+        children: [
+          Icon(
+            Icons.add_circle_outline_rounded,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 12),
+          const Text('Add Custom Quote'),
+        ],
+      ),
+      
+      content: SingleChildScrollView( 
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Form(
           key: formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min, 
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -343,6 +487,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 ),
               ),
               const SizedBox(height: 20),
+              
               TextFormField(
                 controller: quoteController,
                 maxLines: 4,
@@ -363,6 +508,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 ),
               ),
               const SizedBox(height: 16),
+              
               TextFormField(
                 controller: authorController,
                 textInputAction: TextInputAction.done,
@@ -375,160 +521,245 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                   ),
                 ),
               ),
+              
+              const SizedBox(height: 16), 
+              
             ],
           ),
         ),
+      ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final q = quoteController.text.trim();
-              final a = authorController.text.trim().isEmpty ? 'Unknown' : authorController.text.trim();
-              final custom = Quote(id: DateTime.now().toIso8601String(), content: q, author: a);
-              final prefs = await SharedPreferences.getInstance();
-              setState(() {
-                _currentQuote = custom;
-                _quoteHistory.add(custom);
-              });
-              await prefs.setString('quote', jsonEncode(custom.toJson()));
-              await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
-              if (mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        ),
-                        const SizedBox(width: 12),
-                        const Text('Custom quote added successfully'),
-                      ],
-                    ),
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () async {
+            if (!formKey.currentState!.validate()) return;
+            final q = quoteController.text.trim();
+            final a = authorController.text.trim().isEmpty ? 'Unknown' : authorController.text.trim();
+            final custom = Quote(id: DateTime.now().toIso8601String(), content: q, author: a);
+            final prefs = await SharedPreferences.getInstance();
+            setState(() {
+              _currentQuote = custom;
+              _quoteHistory.add(custom);
+            });
+            await prefs.setString('quote', jsonEncode(custom.toJson()));
+            await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
+            if (mounted) {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                      const SizedBox(width: 12),
+                      const Text('Custom quote added successfully'),
+                    ],
                   ),
-                );
-              }
-            },
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add Quote'),
-          ),
-        ],
-      ),
-    );
-  }
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Add Quote'),
+        ),
+      ],
+    ),
+  );
+}
 
   void _shareQuote() {
-    if (_currentQuote != null) {
-      Share.share('${_currentQuote!.content}\n- ${_currentQuote!.author}', subject: 'Quote of the Day');
-    } else {
-      _showError('No quote available to share');
-    }
+      if (_currentQuote != null) {
+        final shareText = '${_currentQuote!.content}\n- ${_currentQuote!.author}';
+
+        SharePlus.instance.share(
+          ShareParams(
+            text: shareText,
+            subject: 'Propelex',
+          ),
+        );
+        
+      } else {
+        _showError('No quote available to share');
+      }
   }
 
-  Future<void> _onExportImage() async {
+  Future<Uint8List?> _generateQuoteImageBytes(Quote quote) async {
+    final double width = 800;
+    final double height = 600;
+    final double padding = 40;
+    
+    final int backgroundHexColor = 0xFFFFFFFF;
+
+    final ui.PictureRecorder recorder = ui.PictureRecorder();
+    final ui.Canvas canvas = ui.Canvas(recorder, Rect.fromLTWH(0, 0, width, height));
+
+    final Paint backgroundPaint = Paint()..color = const ui.Color(0xFFFFFFFF); 
+    canvas.drawRect(Rect.fromLTWH(0, 0, width, height), backgroundPaint);
+
+    final quoteStyle = TextStyle(
+      color: const Color(0xFF000000),
+      fontSize: 32,
+      fontWeight: FontWeight.w600,
+    );
+
+    // 4. Draw Quote Content
+    final textPainter = TextPainter(
+      text: TextSpan(text: '“${quote.content}”', style: quoteStyle),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+    
+    textPainter.layout(maxWidth: width - 2 * padding);
+    
+    // Calculate center position
+    final quoteX = (width - textPainter.width) / 2;
+    final quoteY = (height - textPainter.height) / 2 - 40;
+    
+
+    textPainter.paint(canvas, Offset(quoteX, quoteY));
+
+    final authorStyle = TextStyle(
+      color: const Color(0xFF666666),
+      fontSize: 24,
+      fontStyle: FontStyle.italic,
+    );
+      
+    final authorPainter = TextPainter(
+      text: TextSpan(text: '— ${quote.author}', style: authorStyle),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+
+    authorPainter.layout(maxWidth: width - 2 * padding);
+
+    final authorX = (width - authorPainter.width) / 2;
+    final authorY = quoteY + textPainter.height + 20;
+    
+    authorPainter.paint(canvas, Offset(authorX, authorY));
+    
+    final ui.Image image = await recorder.endRecording().toImage(width.toInt(), height.toInt());
+    
+    final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    
+    return byteData?.buffer.asUint8List();
+  }
+
+  Future<void> _saveQuoteToGallery() async {
     if (_currentQuote == null) {
-      _showError('No quote available');
+      _showError('No quote available to save');
       return;
     }
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: const Text('Share image'),
-              onTap: () async { Navigator.pop(ctx); await _shareQuoteAsImage(); },
-            ),
-            ListTile(
-              leading: const Icon(Icons.save_alt),
-              title: const Text('Save image'),
-              onTap: () async { Navigator.pop(ctx); await _saveQuoteImage(); },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Future<Uint8List?> _captureExportPng({double pixelRatio = 3.0}) async {
-    final ctx = _exportCardKey.currentContext;
-    if (ctx == null) return null;
-    final ro = ctx.findRenderObject();
-    if (ro is! RenderRepaintBoundary) return null;
-    final image = await ro.toImage(pixelRatio: pixelRatio);
-    final bd = await image.toByteData(format: ui.ImageByteFormat.png);
-    return bd?.buffer.asUint8List();
+    Uint8List? bytes;
+
+    try {
+      bytes = await _generateQuoteImageBytes(_currentQuote!);
+
+      if (bytes == null) {
+        _showError('Failed to generate quote image');
+        return;
+      }
+
+      await Gal.putImageBytes(
+        bytes,
+        album: 'Propelex',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 20),
+              SizedBox(width: 8),
+              Text('Quote image saved to gallery!'),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on GalException catch (e) {
+      debugPrint('Gal save failed: ${e.type}');
+      if (!mounted) return;
+      
+      String errorMessage;
+      if (e.type == GalExceptionType.accessDenied) {
+        errorMessage = 'Storage permission is required to save images. Opening settings...';
+        _showError(errorMessage); 
+        openAppSettings(); 
+      } else {
+        errorMessage = 'Failed to save image: ${e.type.toString().split('.').last}';
+        _showError(errorMessage);
+      }
+    } catch (e) {
+      debugPrint('General error saving image: $e');
+      _showError('An unexpected error occurred while saving the image.');
+    }
   }
 
   Future<void> _shareQuoteAsImage() async {
-    if (_currentQuote == null) { _showError('No quote available to share'); return; }
-    try {
-      final bytes = await _captureExportPng(pixelRatio: 3.0);
-      if (bytes == null) { _showError('Failed to capture quote image'); return; }
-      final tempDir = await getTemporaryDirectory();
-      final file = await File('${tempDir.path}/quote.png').writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(file.path)], text: 'Quote of the Day');
-    } catch (_) { _showError('Failed to share quote as image'); }
-  }
-
-  Future<void> _saveQuoteImage() async {
-    try {
-      final bytes = await _captureExportPng(pixelRatio: 3.0);
-      if (bytes == null) { _showError('Failed to capture quote image'); return; }
-      // Request permissions where needed (older Android / iOS Photos)
-      try {
-        if (Platform.isAndroid) {
-          await Permission.storage.request();
-        } else if (Platform.isIOS) {
-          await Permission.photosAddOnly.request();
-        }
-      } catch (_) {}
-      final name = 'quote_${DateTime.now().millisecondsSinceEpoch}.png';
-      final result = await SaverGallery.saveImage(
-        bytes,
-        name: name,
-        androidRelativePath: 'Pictures/Quotes',
-        androidExistNotSave: false,
-      );
-      if (!mounted) return;
-      if (result.isSuccess) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved to Pictures/Quotes')));
-      } else {
-        _showError('Failed to save image');
+    if (_currentQuote == null) {
+        _showError('No quote available to share');
+        return;
       }
-    } catch (_) {
-      _showError('Failed to save image');
-    }
+      
+      Uint8List? bytes;
+      File? file;
+
+      try {
+        bytes = await _generateQuoteImageBytes(_currentQuote!); 
+        
+        if (bytes == null) {
+          _showError('Failed to generate quote image');
+          return;
+        }
+
+        final tempDir = await getTemporaryDirectory();
+        final fileName = 'propelex_quote_${DateTime.now().millisecondsSinceEpoch}.png';
+        file = File('${tempDir.path}/$fileName');
+        await file.writeAsBytes(bytes);
+
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Propelex: Your daily dose of motivation!',
+          subject: 'Propelex Quote',
+        );
+        
+      } catch (e) {
+        debugPrint('Error sharing image: $e');
+        _showError('Failed to share quote as image');
+      } finally {
+        if (file != null && await file.exists()) {
+          await file.delete();
+        }
+      }
   }
 
-  Future<void> _quickSetNotificationTime() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString('notification_time') ?? '08:00';
-    final initial = TimeOfDay(
-      hour: int.parse(saved.split(':')[0]),
-      minute: int.parse(saved.split(':')[1]),
-    );
-    final picked = await showTimePicker(context: context, initialTime: initial);
-    if (picked != null) {
-      final s = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      await prefs.setString('notification_time', s);
-      await rescheduleNotification();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Notification time set: $s')));
-    }
-  }
+  // Future<void> _quickSetNotificationTime() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final saved = prefs.getString('notification_time') ?? '08:00';
+  //   final initial = TimeOfDay(
+  //     hour: int.parse(saved.split(':')[0]),
+  //     minute: int.parse(saved.split(':')[1]),
+  //   );
+  //   final picked = await showTimePicker(context: context, initialTime: initial);
+  //   if (picked != null) {
+  //     final s = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+  //     await prefs.setString('notification_time', s);
+  //     await rescheduleNotification();
+  //     if (!mounted) return;
+  //     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Notification time set: $s')));
+  //   }
+  // }
 
   void _copyQuote() {
     if (_currentQuote != null) {
@@ -786,7 +1017,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
               padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.favorite_rounded,
                     color: Colors.red,
                     size: 24,
@@ -858,7 +1089,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: Icon(
+                      leading: const Icon(
                         Icons.favorite_rounded,
                         color: Colors.red,
                         size: 24,
@@ -1181,15 +1412,48 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 } else if (v == 'rated') {
                   _showRatedQuotes();
                 } else if (v == 'about') {
+                  final colorScheme = Theme.of(context).colorScheme;
+                  
                   showAboutDialog(
                     context: context,
                     applicationName: 'Propelex',
-                    applicationVersion: '0.1.0',
+                    applicationVersion: '1.0.0',
                     applicationIcon: Icon(
                       Icons.format_quote_rounded,
                       size: 48,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: colorScheme.primary,
                     ),
+                    applicationLegalese: '© 2026 New Dawn',
+                    
+                    children: <Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        "An inspirational quotes app to brighten your day.",
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text(
+                            "Made with ",
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          Icon(
+                            Icons.favorite,
+                            size: 16,
+                            color: colorScheme.error,
+                          ),
+                          Text(
+                            " by Nagh Diefalla",
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   );
                 } else if (v == 'logout') {
                   await _logout();
@@ -1400,7 +1664,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                             ],
                             if (_currentQuote != null) ...[
                               const SizedBox(height: 32),
-                              // Minimal action buttons - icon only
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -1428,10 +1691,15 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                                     tooltip: 'Share as image',
                                     onPressed: _shareQuoteAsImage,
                                   ),
+                                  const SizedBox(width: 16),
+                                  _MinimalIconButton(
+                                    icon: Icons.download_rounded,
+                                    tooltip: 'Save Image to Gallery',
+                                    onPressed: _saveQuoteToGallery,
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 24),
-                              // Minimal rating - smaller stars, no container
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: List.generate(
@@ -1477,9 +1745,8 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                   ),
                 ),
               ),
-            // export widget for high-DPI branded image capture
             Offstage(
-              offstage: true, // مخفية لكن مرسومة
+              offstage: true,
               child: RepaintBoundary(
                 key: _exportCardKey,
                 child: Material(
@@ -1497,83 +1764,185 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   }
 
   // Branded export widget (offstage) for crisp image export with accent strip and watermark
+  // Widget _buildExportCard(BuildContext context) {
+  //   final quote = _currentQuote;
+  //   final cs = Theme.of(context).colorScheme;
+  //   final textTheme = Theme.of(context).textTheme;
+  //   return Container(
+  //     constraints: const BoxConstraints(maxWidth: 800),
+  //     padding: const EdgeInsets.all(32),
+  //     color: cs.surface.withValues(alpha: 0.02),
+  //     child: Container(
+  //       padding: const EdgeInsets.all(24),
+  //       decoration: BoxDecoration(
+  //         gradient: LinearGradient(
+  //           colors: [cs.primary.withValues(alpha: 0.18), cs.secondary.withValues(alpha: 0.18)],
+  //           begin: Alignment.topLeft,
+  //           end: Alignment.bottomRight,
+  //         ),
+  //         borderRadius: BorderRadius.circular(24),
+  //       ),
+  //       child: Stack(
+  //         children: [
+  //           // Acrylic overlay
+  //           Positioned.fill(
+  //             child: BackdropFilter(
+  //               filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+  //               child: DecoratedBox(
+  //                 decoration: BoxDecoration(
+  //                   color: cs.surface.withValues(alpha: 0.12),
+  //                   borderRadius: BorderRadius.circular(24),
+  //                   border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+  //                 ),
+  //               ),
+  //             ),
+  //           ),
+  //           // Accent bar
+  //           Positioned(
+  //             left: 0,
+  //             top: 0,
+  //             bottom: 0,
+  //             child: Container(width: 6, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(6))),
+  //           ),
+  //           // Content
+  //           Padding(
+  //             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+  //             child: Column(
+  //               mainAxisSize: MainAxisSize.min,
+  //               crossAxisAlignment: CrossAxisAlignment.center,
+  //               children: [
+  //                 Icon(Icons.format_quote_rounded, size: 36, color: cs.primary),
+  //                 const SizedBox(height: 12),
+  //                 if (quote != null) ...[
+  //                   Text(
+  //                     quote.content,
+  //                     textAlign: TextAlign.center,
+  //                     style: textTheme.headlineSmall?.copyWith(height: 1.3, color: cs.onSurface),
+  //                   ),
+  //                   const SizedBox(height: 16),
+  //                   Text('- ${quote.author}', style: textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
+  //                 ] else ...[
+  //                   Text('No quote available', style: textTheme.titleMedium),
+  //                 ],
+  //                 const SizedBox(height: 24),
+  //                 // Watermark
+  //                 Align(
+  //                   alignment: Alignment.bottomRight,
+  //                   child: Row(
+  //                     mainAxisAlignment: MainAxisAlignment.end,
+  //                     children: [
+  //                       Icon(Icons.auto_awesome, size: 18, color: cs.onSurface.withValues(alpha: 0.6)),
+  //                       const SizedBox(width: 6),
+  //                       Text('Propelex', style: textTheme.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.6))),
+  //                     ],
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
+
   Widget _buildExportCard(BuildContext context) {
     final quote = _currentQuote;
     final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final double exportWidth = 800;
+    final double exportHeight = 600;
+
     return Container(
-      constraints: const BoxConstraints(maxWidth: 800),
-      padding: const EdgeInsets.all(32),
-      color: cs.surface.withValues(alpha: 0.02),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [cs.primary.withValues(alpha: 0.18), cs.secondary.withValues(alpha: 0.18)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+      width: exportWidth,
+      height: exportHeight,
+      padding: const EdgeInsets.all(24),
+      color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F7F7), // Light background color
+      child: Center(
+        child: Container(
+          width: exportWidth * 0.9,
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF282828) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black.withValues(alpha: 0.5) : Colors.grey.withValues(alpha: 0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Stack(
-          children: [
-            // Acrylic overlay
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: cs.surface.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.lightbulb_outline_rounded,
+                size: 32,
+                color: cs.primary,
+              ),
+              const SizedBox(height: 24),
+              
+              if (quote != null) ...[
+                Text(
+                  '“${quote.content}”',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
-              ),
-            ),
-            // Accent bar
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: Container(width: 6, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(6))),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
+                const SizedBox(height: 30),
+                Container(
+                  width: 60,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                Text(
+                  '- ${quote.author}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ] else ...[
+                Text(
+                  'No quote available',
+                  style: TextStyle(fontSize: 24, color: cs.onSurface),
+                ),
+              ],
+              const Spacer(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.format_quote_rounded, size: 36, color: cs.primary),
-                  const SizedBox(height: 12),
-                  if (quote != null) ...[
-                    Text(
-                      quote.content,
-                      textAlign: TextAlign.center,
-                      style: textTheme.headlineSmall?.copyWith(height: 1.3, color: cs.onSurface),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('- ${quote.author}', style: textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
-                  ] else ...[
-                    Text('No quote available', style: textTheme.titleMedium),
-                  ],
-                  const SizedBox(height: 24),
-                  // Watermark
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Icon(Icons.auto_awesome, size: 18, color: cs.onSurface.withValues(alpha: 0.6)),
-                        const SizedBox(width: 6),
-                        Text('Propelex', style: textTheme.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.6))),
-                      ],
+                  Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 18,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Propelex',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: cs.primary,
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
