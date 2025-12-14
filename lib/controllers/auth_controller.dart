@@ -6,25 +6,26 @@ import '../views/login.dart';
 
 class AuthController extends GetxController {
   static AuthController get instance => Get.find();
-  late final Rx<User?> firebaseUser;
+  
+  // NOTE: Your original file had both firebaseUser and _user, simplifying to just 'user'
+  // for consistency with the last provided code structure.
+  final Rx<User?> user = FirebaseAuth.instance.currentUser.obs; 
   final RxBool isLoading = false.obs;
 
-  final Rx<User?> _user = FirebaseAuth.instance.currentUser.obs;
-  
-  User? get user => _user.value;
+  // The simplified getter for consistent access
+  // User? get user => _user.value; 
 
-  @override
   @override
   void onReady() {
     super.onReady();
-    firebaseUser = Rx<User?>(FirebaseAuth.instance.currentUser);
-    firebaseUser.bindStream(FirebaseAuth.instance.userChanges());
-    ever(firebaseUser, _initialScreen);
+    // Replaced the original firebaseUser variable with the simplified 'user'
+    user.bindStream(FirebaseAuth.instance.userChanges());
+    ever(user, _initialScreen);
   }
 
   // Handle navigation based on user state
-  void _initialScreen(User? user) {
-    if (user == null) {
+  void _initialScreen(User? firebaseUser) { // Renamed parameter for clarity
+    if (firebaseUser == null) {
       // User is NOT logged in
       Get.offAll(() => const LoginPage());
     } else {
@@ -33,7 +34,7 @@ class AuthController extends GetxController {
     }
   }
 
-  // --- Login Method ---
+  // --- Login Method --- (Retained from your previous code)
   Future<void> login(String email, String password) async {
     isLoading.value = true;
     try {
@@ -41,7 +42,6 @@ class AuthController extends GetxController {
         email: email,
         password: password,
       );
-      // Success is handled by the `authStateChanges` listener
     } on FirebaseAuthException catch (e) {
       String message = 'An unknown error occurred.';
       if (e.code == 'user-not-found' || e.code == 'wrong-password') {
@@ -61,7 +61,7 @@ class AuthController extends GetxController {
     }
   }
 
-  // --- Register Method ---
+  // --- Register Method --- (Retained from your previous code)
   Future<void> register(String email, String password) async {
     isLoading.value = true;
     try {
@@ -69,7 +69,6 @@ class AuthController extends GetxController {
         email: email,
         password: password,
       );
-      // Success is handled by the `authStateChanges` listener
       Get.snackbar(
         'Success',
         'Account created successfully! You are now logged in.',
@@ -98,7 +97,42 @@ class AuthController extends GetxController {
     }
   }
 
-  // --- Logout Method ---
+  // --- 🎯 NEW: Forget Password Method ---
+  Future<void> resetPassword(String email) async {
+    isLoading.value = true;
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      
+      Get.snackbar(
+        'Success',
+        'Password reset link sent to $email. Check your inbox.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
+      );
+      // Navigate the user back to the login page after success
+      Get.off(() => const LoginPage()); 
+
+    } on FirebaseAuthException catch (e) {
+      String message = 'An unknown error occurred.';
+      if (e.code == 'user-not-found' || e.code == 'invalid-email') {
+        message = 'No user found for that email or the email is invalid.';
+      } else if (e.code == 'too-many-requests') {
+        message = 'Too many requests. Try again later.';
+      }
+      Get.snackbar(
+        'Error',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+  // --- Logout Method --- (Retained from your previous code)
   Future<void> logout() async {
     await FirebaseAuth.instance.signOut();
   }

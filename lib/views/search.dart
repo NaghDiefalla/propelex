@@ -1,3 +1,5 @@
+// search.dart
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'home.dart';
@@ -32,281 +34,270 @@ class _SearchPageState extends State<SearchPage> {
     final hasFilter = _minRating > 0;
 
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'Search quotes or authors...',
-            hintStyle: TextStyle(
-              color: colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
-            border: InputBorder.none,
-            prefixIcon: Icon(
-              Icons.search_rounded,
-              color: colorScheme.primary,
-            ),
-            suffixIcon: _searchQuery.isNotEmpty
-                ? IconButton(
-                    icon: Icon(
-                      Icons.clear_rounded,
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                    tooltip: 'Clear search',
-                    onPressed: () => setState(() => _searchQuery = ''),
-                  )
-                : null,
-          ),
-          onChanged: (value) => setState(() => _searchQuery = value),
-          style: textTheme.bodyLarge,
-        ),
-        actions: [
-          // Filter chip
-          if (hasFilter)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              child: Chip(
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.star_rounded,
-                      size: 16,
-                      color: colorScheme.onSecondaryContainer,
-                    ),
-                    const SizedBox(width: 4),
-                    Text('$_minRating+'),
-                  ],
-                ),
-                backgroundColor: colorScheme.secondaryContainer,
-                onDeleted: () => setState(() => _minRating = 0),
-                deleteIcon: Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: colorScheme.onSecondaryContainer,
-                ),
-              ),
-            ),
-          // Filter menu
-          PopupMenuButton<int>(
-            icon: Icon(
-              Icons.tune_rounded,
-              color: hasFilter ? colorScheme.primary : null,
-            ),
-            tooltip: 'Filter by rating',
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            onSelected: (v) => setState(() => _minRating = v),
-            itemBuilder: (ctx) => [
-              PopupMenuItem<int>(
-                enabled: false,
-                child: Text(
-                  'Minimum Rating',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w700,
+      // ❌ AppBar Removed (Consistent Design)
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Stack( // Consistent Design
+          children: [
+            // Subtle background gradient (Identical Design)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      colorScheme.primary.withOpacity(0.04),
+                      colorScheme.secondary.withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
               ),
-              const PopupMenuDivider(),
-              ...List.generate(6, (i) => PopupMenuItem<int>(
-                    value: i,
-                    child: Row(
-                      children: [
-                        Text('$i+ stars', style: const TextStyle(fontWeight: FontWeight.w500)),
-                        const SizedBox(width: 12),
-                        Row(
-                          children: List.generate(
-                            5,
-                            (idx) => Padding(
-                              padding: const EdgeInsets.only(right: 2),
-                              child: Icon(
-                                idx < i ? Icons.star_rounded : Icons.star_border_rounded,
-                                color: Colors.amber.shade600,
-                                size: 18,
+            ),
+            
+            // Main Content: Search UI (Constrained)
+            Center( // Consistent Design
+              child: ConstrainedBox( // Consistent Design
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12, left: 16, right: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // --- Search Bar and Filter Button (Replaces AppBar) ---
+                      Row(
+                        children: [
+                          // Back Button
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_rounded),
+                            onPressed: () => Get.back(),
+                            tooltip: 'Back',
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: colorScheme.shadow.withOpacity(0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: TextField(
+                                autofocus: true,
+                                decoration: InputDecoration(
+                                  hintText: 'Search quotes or authors...',
+                                  hintStyle: TextStyle(
+                                    color: colorScheme.onSurface.withOpacity(0.5),
+                                  ),
+                                  border: InputBorder.none,
+                                  prefixIcon: Icon(
+                                    Icons.search_rounded,
+                                    color: colorScheme.primary,
+                                  ),
+                                  suffixIcon: _searchQuery.isNotEmpty
+                                      ? IconButton(
+                                          icon: Icon(
+                                            Icons.clear_rounded,
+                                            color: colorScheme.onSurface.withOpacity(0.6),
+                                          ),
+                                          tooltip: 'Clear search',
+                                          onPressed: () => setState(() => _searchQuery = ''),
+                                        )
+                                      : null,
+                                ),
+                                onChanged: (value) => setState(() => _searchQuery = value),
+                                style: textTheme.bodyLarge,
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  )),
-            ],
-          ),
-        ],
-      ),
-      body: hasResults
-          ? Column(
-              children: [
-                // Results count
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  color: colorScheme.surfaceContainerHighest,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.search_rounded,
-                        size: 18,
-                        color: colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${filteredQuotes.length} ${filteredQuotes.length == 1 ? 'quote found' : 'quotes found'}',
-                        style: textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.7),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Quotes list
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredQuotes.length,
-                    separatorBuilder: (context, i) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final quote = filteredQuotes[filteredQuotes.length - 1 - index];
-                      final rating = ratings[quote.id];
-                      final isRated = rating != null && rating > 0;
+                          const SizedBox(width: 8),
 
-                      return Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: colorScheme.outline.withValues(alpha: 0.1),
+                          // --- Filter Menu (Replaces AppBar.actions) ---
+                          PopupMenuButton<int>(
+                            icon: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: colorScheme.shadow.withOpacity(0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.tune_rounded,
+                                color: hasFilter ? colorScheme.primary : colorScheme.onSurface,
+                              ),
+                            ),
+                            tooltip: 'Filter by rating',
+                            onSelected: (value) => setState(() => _minRating = value),
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 0,
+                                child: Text('All Ratings'),
+                              ),
+                              for (var i = 1; i <= 5; i++)
+                                PopupMenuItem(
+                                  value: i,
+                                  child: Text('$i Star${i > 1 ? 's' : ''} & Up'),
+                                ),
+                            ],
                           ),
-                        ),
-                        child: InkWell(
-                          onTap: () {
-                            widget.homeState.setCurrentQuote(quote);
-                            Get.back();
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        ],
+                      ),
+
+                      // --- Filter Chip (Moved from AppBar.actions) ---
+                      if (hasFilter)
+                        Container(
+                          margin: const EdgeInsets.only(top: 8, right: 8),
+                          alignment: Alignment.centerLeft,
+                          child: Chip(
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        quote.content,
-                                        style: textTheme.bodyLarge?.copyWith(
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Icon(
-                                      Icons.arrow_forward_ios_rounded,
-                                      size: 16,
-                                      color: colorScheme.onSurface.withValues(alpha: 0.4),
-                                    ),
-                                  ],
+                                Icon(
+                                  Icons.star_rounded,
+                                  size: 16,
+                                  color: colorScheme.onSecondaryContainer,
                                 ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '- ${quote.author}',
-                                        style: textTheme.bodyMedium?.copyWith(
-                                          color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ),
-                                    if (isRated) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.amber.withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.star_rounded,
-                                              size: 14,
-                                              color: Colors.amber.shade700,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '$rating',
-                                              style: textTheme.labelSmall?.copyWith(
-                                                color: Colors.amber.shade900,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
+                                const SizedBox(width: 4),
+                                Text('$_minRating+'),
                               ],
+                            ),
+                            backgroundColor: colorScheme.secondaryContainer,
+                            onDeleted: () => setState(() => _minRating = 0),
+                            deleteIcon: Icon(
+                              Icons.close_rounded,
+                              size: 18,
+                              color: colorScheme.onSecondaryContainer,
                             ),
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            )
-          : Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      hasQuery || hasFilter
-                          ? Icons.search_off_rounded
-                          : Icons.search_rounded,
-                      size: 80,
-                      color: colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      hasQuery || hasFilter
-                          ? 'No quotes found'
-                          : 'Search your quote history',
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.w600,
+                      
+                      const SizedBox(height: 16),
+
+                      // --- Results Count/Info ---
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${filteredQuotes.length} ${filteredQuotes.length == 1 ? 'quote' : 'quotes'} found',
+                              style: textTheme.labelMedium?.copyWith(
+                                color: colorScheme.onSurface.withOpacity(0.7),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      hasQuery || hasFilter
-                          ? 'Try adjusting your search query or rating filter'
-                          : 'Enter keywords to search through your saved quotes',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (hasFilter) ...[
-                      const SizedBox(height: 24),
-                      OutlinedButton.icon(
-                        onPressed: () => setState(() => _minRating = 0),
-                        icon: const Icon(Icons.clear_rounded),
-                        label: const Text('Clear rating filter'),
+
+                      const SizedBox(height: 12),
+
+                      // --- Quotes List or Empty State ---
+                      Expanded(
+                        child: hasResults
+                            ? ListView.separated(
+                                padding: EdgeInsets.zero,
+                                itemCount: filteredQuotes.length,
+                                separatorBuilder: (context, i) => const SizedBox(height: 12),
+                                itemBuilder: (context, index) {
+                                  final quote = filteredQuotes[filteredQuotes.length - 1 - index];
+                                  final rating = ratings[quote.id];
+                                  final isRated = rating != null && rating > 0;
+                                  return Card(
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      side: BorderSide(
+                                        color: colorScheme.outline.withOpacity(.1),
+                                      ),
+                                    ),
+                                    child: ListTile(
+                                      title: Text(quote.content, maxLines: 3, overflow: TextOverflow.ellipsis),
+                                      subtitle: Text(quote.author),
+                                      trailing: isRated
+                                          ? Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  rating.toString(),
+                                                  style: textTheme.labelLarge?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: colorScheme.onSurface,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Icon(Icons.star_rounded, color: Colors.amber.shade700, size: 20),
+                                              ],
+                                            )
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.search_off_rounded,
+                                        size: 64,
+                                        color: colorScheme.onSurface.withOpacity(0.2),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      Text(
+                                        hasQuery || hasFilter
+                                            ? 'No quotes found'
+                                            : 'Search your quote history',
+                                        style: textTheme.headlineSmall?.copyWith(
+                                          color: colorScheme.onSurface.withOpacity(0.7),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        hasQuery || hasFilter
+                                            ? 'Try adjusting your search query or rating filter'
+                                            : 'Enter keywords to search through your saved quotes',
+                                        style: textTheme.bodyMedium?.copyWith(
+                                          color: colorScheme.onSurface.withOpacity(0.5),
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      if (hasFilter) ...[
+                                        const SizedBox(height: 24),
+                                        OutlinedButton.icon(
+                                          onPressed: () => setState(() => _minRating = 0),
+                                          icon: const Icon(Icons.clear_rounded),
+                                          label: const Text('Clear rating filter'),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
     );
   }
 }

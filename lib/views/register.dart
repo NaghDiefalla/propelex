@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
-// import 'login.dart'; // No direct import needed if navigating back with Get.back()
 
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
@@ -15,46 +14,40 @@ class RegistrationPage extends StatefulWidget {
 class RegistrationPageState extends State<RegistrationPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController(); // Added Confirm Password
+  final TextEditingController confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true; // State for Confirm Password visibility
+  bool _obscureConfirmPassword = true;
 
-  // Access the AuthController instance
   final AuthController authController = AuthController.instance;
 
   Future<void> _attemptRegister() async {
-    // 1. Validate the form fields
     if (!_formKey.currentState!.validate()) return;
 
     final email = emailController.text.trim();
     final password = passwordController.text;
 
-    // 2. Call the Firebase registration method via the controller
     await authController.register(email, password);
-    
-    // Note: Navigation (to HomePage) is handled by the AuthController
-    // upon successful registration, so we don't need a Get.offAll() here.
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // ❌ AppBar Removed
       resizeToAvoidBottomInset: true,
-      // Use Obx to rebuild the UI when isLoading changes (for button state)
       body: Obx(
         () => SafeArea(
           child: Stack(
             children: [
-              // Subtle background gradient (Identical to Login)
+              // Subtle background gradient
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.04),
-                        Theme.of(context).colorScheme.secondary.withValues(alpha: 0.04),
+                        Theme.of(context).colorScheme.primary.withOpacity(0.04),
+                        Theme.of(context).colorScheme.secondary.withOpacity(0.04),
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -74,21 +67,19 @@ class RegistrationPageState extends State<RegistrationPage> {
                         children: [
                           const SizedBox(height: 12),
                           Text(
-                            // Changed Title
                             'Create Your Account',
                             style: Theme.of(context).textTheme.headlineLarge,
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            // Changed Subtitle
                             'Join for daily inspiration and quotes',
                             style: Theme.of(context).textTheme.bodyMedium,
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 32),
 
-                          // --- 1. Email Field (Identical look) ---
+                          // --- 1. Email Field ---
                           TextFormField(
                             controller: emailController,
                             textInputAction: TextInputAction.next,
@@ -110,7 +101,7 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           const SizedBox(height: 20),
 
-                          // --- 2. Password Field (Identical look) ---
+                          // --- 2. Password Field ---
                           TextFormField(
                             controller: passwordController,
                             textInputAction: TextInputAction.next,
@@ -135,7 +126,7 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           const SizedBox(height: 20),
                           
-                          // --- 3. Confirm Password Field (New Field, Same look) ---
+                          // --- 3. Confirm Password Field ---
                           TextFormField(
                             controller: confirmPasswordController,
                             textInputAction: TextInputAction.done,
@@ -151,7 +142,6 @@ class RegistrationPageState extends State<RegistrationPage> {
                             obscureText: _obscureConfirmPassword,
                             decoration: InputDecoration(
                               labelText: 'Confirm Password',
-                              // Used a slightly different icon for distinction
                               prefixIcon: const Icon(Icons.lock_reset), 
                               suffixIcon: IconButton(
                                 icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off),
@@ -162,14 +152,11 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           
                           const SizedBox(height: 24),
-                          
-                          // Removed Forgot Password link for registration
 
-                          // --- Register Button (Identical style) ---
+                          // --- Register Button ---
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton(
-                              // Disable button and show spinner while loading
                               onPressed: authController.isLoading.value ? null : _attemptRegister,
                               style: FilledButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -186,14 +173,13 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           const SizedBox(height: 16),
                           
-                          // --- Back to Login TextButton (Identical style) ---
+                          // --- Back to Login TextButton ---
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text("Already have an account?", style: Theme.of(context).textTheme.bodyMedium),
                               TextButton(
-                                // Navigate back to the LoginPage
-                                onPressed: () => Get.back(), 
+                                onPressed: authController.isLoading.value ? null : () => Get.back(), 
                                 child: const Text('Login'),
                               ),
                             ],

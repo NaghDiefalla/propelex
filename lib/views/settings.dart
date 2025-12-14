@@ -66,7 +66,8 @@ class SettingsPage extends StatelessWidget {
       await prefs.setString('notification_time', timeString);
       debugPrint('Notification time set: $timeString');
       if (homeState.enableNotifications && homeState.currentQuote != null) {
-        await homeState.rescheduleNotification();
+        // Use the new public method
+        await homeState.rescheduleNotification(); 
       }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -79,7 +80,7 @@ class SettingsPage extends StatelessWidget {
                   color: Theme.of(context).colorScheme.onPrimaryContainer,
                 ),
                 const SizedBox(width: 12),
-                Text('Notification time set to $timeString'),
+                Text('Notification time set to ${_formatTime(context, timeString)}'),
               ],
             ),
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -108,89 +109,10 @@ class SettingsPage extends StatelessWidget {
 Future<String> _getFormattedNotificationTime(BuildContext context) async {
   final prefs = await SharedPreferences.getInstance();
   final timeString = prefs.getString('notification_time') ?? '08:00';
-  
-  // Use the existing _formatTime helper (which you need to ensure is present 
-  // in SettingsPage, as provided in the last response)
   return _formatTime(context, timeString);
 }
 
-  // Future<void> _testNotification(BuildContext context) async {
-  //   try {
-  //     const androidDetails = AndroidNotificationDetails(
-  //       'quote_channel',
-  //       'Quote of the Day',
-  //       importance: Importance.high,
-  //       priority: Priority.high,
-  //       styleInformation: BigTextStyleInformation(''),
-  //       showWhen: true,
-  //     );
-  //     const platformDetails = NotificationDetails(android: androidDetails);
-
-  //     final now = tz.TZDateTime.now(tz.local);
-  //     final scheduledTime = now.add(const Duration(seconds: 10));
-  //     final quote = homeState.currentQuote;
-  //     final notificationText = quote != null
-  //         ? '${quote.content}\n- ${quote.author}'
-  //         : 'Test notification: No quote available';
-
-  //     final status = await Permission.scheduleExactAlarm.request();
-  //     debugPrint('Exact alarm permission status: $status');
-  //     if (status.isPermanentlyDenied) {
-  //       if (context.mounted) {
-  //         await showDialog(
-  //           context: context,
-  //           builder: (context) => AlertDialog(
-  //             title: const Text('Permission Required'),
-  //             content: const Text('Please enable exact alarm permission in system settings to allow precise notifications.'),
-  //             actions: [
-  //               TextButton(
-  //                 onPressed: () => Navigator.pop(context),
-  //                 child: const Text('Cancel'),
-  //               ),
-  //               TextButton(
-  //                 onPressed: () async {
-  //                   Navigator.pop(context);
-  //                   await openAppSettings();
-  //                 },
-  //                 child: const Text('Open Settings'),
-  //               ),
-  //             ],
-  //           ),
-  //         );
-  //       }
-  //       return;
-  //     }
-
-  //     bool useExact = status.isGranted;
-  //     await FlutterLocalNotificationsPlugin().zonedSchedule(
-  //       999,
-  //       'Test Notification',
-  //       notificationText,
-  //       scheduledTime,
-  //       platformDetails,
-  //       androidScheduleMode: useExact
-  //           ? AndroidScheduleMode.exactAllowWhileIdle
-  //           : AndroidScheduleMode.inexactAllowWhileIdle,
-  //       payload: 'test_notification',
-  //     );
-
-  //     if (context.mounted) {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         SnackBar(
-  //           content: Text('Test notification scheduled (check in 10 seconds, ${useExact ? 'exact' : 'inexact'} timing)'),
-  //         ),
-  //       );
-  //     }
-  //     debugPrint('Test notification scheduled for: $scheduledTime (exact: $useExact)');
-  //   } catch (e) {
-  //     debugPrint('Error scheduling test notification: $e');
-  //     if (context.mounted) {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         const SnackBar(content: Text('Failed to schedule test notification')),
-  //       );
-  //     }
-  //   }
-  // }
+  // NOTE: _testNotification method has been omitted as it was commented out in the original.
 
   Future<void> _selectApiSource(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
@@ -451,397 +373,420 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20.0),
-        children: [
-          // --- New: API Source Section ---
-          _SettingsSection(
-            title: 'Quote Source',
-            icon: Icons.cloud_queue_rounded,
-            children: [
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: .1),
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Subtle background gradient (Consistent Design)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      colorScheme.primary.withOpacity(0.04),
+                      colorScheme.secondary.withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.api_rounded,
-                      color: colorScheme.onTertiaryContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text('Select Quote API'),
-                  subtitle: FutureBuilder<String>(
-                    future: SharedPreferences.getInstance().then(
-                      // Default to zenquotes name
-                      (prefs) => prefs.getString('api_source_name') ?? QuoteApiSource.zenquotes.name,
-                    ),
-                    builder: (context, snapshot) {
-                      final currentId = snapshot.data ?? QuoteApiSource.zenquotes.name;
-                      final currentApi = availableApis.firstWhere(
-                            (api) => api.id.name == currentId,
-                        orElse: () => availableApis.first,
-                      );
-                      return Text(
-                        'Currently using ${currentApi.name}',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: .6),
-                        ),
-                      );
-                    },
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: .4),
-                  ),
-                  onTap: () => _selectApiSource(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          // --- End API Source Section ---
-
-          // Notifications Section
-          _SettingsSection(
-            title: 'Notifications',
-            icon: Icons.notifications_outlined,
-            children: [
-              const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: .1),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.access_time_rounded,
-                      color: colorScheme.onPrimaryContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text('Notification Time'), // More descriptive title
-                  subtitle: FutureBuilder<String>(
-                    // Use the clean, dedicated function
-                    future: _getFormattedNotificationTime(context), 
-                    builder: (context, snapshot) {
-                      // Show loading indicator or default value while waiting
-                      final timeText = snapshot.data ?? 'Loading...'; 
-                      
-                      return Text(
-                        // Use the formatted string directly
-                        'Quote scheduled for $timeText',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: .6),
-                        ),
-                      );
-                    },
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: .4),
-                  ),
-                  onTap: () => _setNotificationTime(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Card(
-              //   elevation: 0,
-              //   shape: RoundedRectangleBorder(
-              //     borderRadius: BorderRadius.circular(16),
-              //     side: BorderSide(
-              //       color: colorScheme.outline.withValues(alpha: .1),
-              //     ),
-              //   ),
-              //   child: ListTile(
-              //     leading: Container(
-              //       padding: const EdgeInsets.all(8),
-              //       decoration: BoxDecoration(
-              //         color: colorScheme.secondaryContainer,
-              //         borderRadius: BorderRadius.circular(10),
-              //       ),
-              //       child: Icon(
-              //         Icons.notifications_active_rounded,
-              //         color: colorScheme.onSecondaryContainer,
-              //         size: 20,
-              //       ),
-              //     ),
-              //     title: const Text('Test Notification'),
-              //     subtitle: Text(
-              //       'Send a test notification in 10 seconds',
-              //       style: textTheme.bodySmall?.copyWith(
-              //         color: colorScheme.onSurface.withValues(alpha: .6),
-              //       ),
-              //     ),
-              //     trailing: Icon(
-              //       Icons.chevron_right_rounded,
-              //       color: colorScheme.onSurface.withValues(alpha: .4),
-              //     ),
-              //     onTap: () => _testNotification(context),
-              //   ),
-              // ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          // Appearance Section
-          _SettingsSection(
-            title: 'Appearance',
-            icon: Icons.palette_outlined,
-            children: [
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: .1),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.brightness_6_rounded,
-                      color: colorScheme.onTertiaryContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text('Theme Mode'),
-                  subtitle: FutureBuilder<String>(
-                    future: SharedPreferences.getInstance().then(
-                      (prefs) => prefs.getString('theme_mode') ?? 'system',
-                    ),
-                    builder: (context, snapshot) {
-                      final mode = snapshot.data ?? 'system';
-                      final modeText = mode == 'system'
-                          ? 'Follow system'
-                          : mode == 'light'
-                              ? 'Light mode'
-                              : 'Dark mode';
-                      return Text(
-                        modeText,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: .6),
-                        ),
-                      );
-                    },
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: .4),
-                  ),
-                  onTap: () => _selectThemeMode(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          // Data Management Section
-          _SettingsSection(
-            title: 'Data Management',
-            icon: Icons.storage_outlined,
-            children: [
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: .1),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.backup_rounded,
-                      color: colorScheme.onPrimaryContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text('Export Data'),
-                  subtitle: Text(
-                    'Backup all quotes, favorites, and settings',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: .6),
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: .4),
-                  ),
-                  onTap: () => _exportData(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: .1),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.restore_rounded,
-                      color: colorScheme.onSecondaryContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text('Import Data'),
-                  subtitle: Text(
-                    'Restore from a backup JSON file',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: .6),
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: .4),
-                  ),
-                  onTap: () => _importData(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.error.withValues(alpha: .3),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.delete_outline_rounded,
-                      color: colorScheme.onErrorContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    'Clear All Data',
-                    style: TextStyle(
-                      color: colorScheme.error,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Remove history, favorites, ratings, and cache',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: .6),
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.error,
-                  ),
-                  onTap: () => _clearUserData(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          // Account Section
-          _SettingsSection(
-            title: 'Account',
-            icon: Icons.person_outline_rounded,
-            children: [
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.error.withValues(alpha: .3),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.logout_rounded,
-                      color: colorScheme.onErrorContainer,
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    'Sign Out',
-                    style: TextStyle(
-                      color: colorScheme.error,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Log out of your account',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: .7),
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.error,
-                  ),
-                  onTap: () => _logout(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          // App Info
-          Center(
-            child: Text(
-              'Propelex v1.0.0',
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: .7),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-        ],
+            
+            // Main Content: Constrained and Centered
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12.0, left: 16.0, right: 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // --- Custom Header (Replaces AppBar) ---
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_rounded),
+                            onPressed: () => Get.back(),
+                            tooltip: 'Back',
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Settings',
+                            style: textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: colorScheme.onBackground,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // --- List View Content ---
+                      Expanded(
+                        child: ListView(
+                          padding: EdgeInsets.zero,
+                          children: [
+                            // --- New: API Source Section ---
+                            _SettingsSection(
+                              title: 'Quote Source',
+                              icon: Icons.cloud_queue_rounded,
+                              children: [
+                                Card(
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: colorScheme.outline.withOpacity(0.1),
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.tertiaryContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.api_rounded,
+                                        color: colorScheme.onTertiaryContainer,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: const Text('Select Quote API'),
+                                    subtitle: FutureBuilder<String>(
+                                      future: SharedPreferences.getInstance().then(
+                                        // Default to zenquotes name
+                                        (prefs) => prefs.getString('api_source_name') ?? QuoteApiSource.zenquotes.name,
+                                      ),
+                                      builder: (context, snapshot) {
+                                        final currentId = snapshot.data ?? QuoteApiSource.zenquotes.name;
+                                        final currentApi = availableApis.firstWhere(
+                                              (api) => api.id.name == currentId,
+                                          orElse: () => availableApis.first,
+                                        );
+                                        return Text(
+                                          'Currently using ${currentApi.name}',
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurface.withOpacity(0.6),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.onSurface.withOpacity(0.4),
+                                    ),
+                                    onTap: () => _selectApiSource(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            // --- End API Source Section ---
+                            
+                            // Notifications Section
+                            _SettingsSection(
+                              title: 'Notifications',
+                              icon: Icons.notifications_outlined,
+                              children: [
+                                const SizedBox(height: 12),
+                                Card(
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: colorScheme.outline.withOpacity(0.1),
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.primaryContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.access_time_rounded,
+                                        color: colorScheme.onPrimaryContainer,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: const Text('Notification Time'), // More descriptive title
+                                    subtitle: FutureBuilder<String>(
+                                      // Use the clean, dedicated function
+                                      future: _getFormattedNotificationTime(context), 
+                                      builder: (context, snapshot) {
+                                        // Show loading indicator or default value while waiting
+                                        final timeText = snapshot.data ?? 'Loading...'; 
+                                        
+                                        return Text(
+                                          // Use the formatted string directly
+                                          'Quote scheduled for $timeText',
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurface.withOpacity(0.6),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.onSurface.withOpacity(0.4),
+                                    ),
+                                    onTap: () => _setNotificationTime(context),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                // Card (Test Notification) commented out as per original file state.
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            // Appearance Section
+                            _SettingsSection(
+                              title: 'Appearance',
+                              icon: Icons.palette_outlined,
+                              children: [
+                                Card(
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: colorScheme.outline.withOpacity(0.1),
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.tertiaryContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.brightness_6_rounded,
+                                        color: colorScheme.onTertiaryContainer,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: const Text('Theme Mode'),
+                                    subtitle: FutureBuilder<String>(
+                                      future: SharedPreferences.getInstance().then(
+                                        (prefs) => prefs.getString('theme_mode') ?? 'system',
+                                      ),
+                                      builder: (context, snapshot) {
+                                        final mode = snapshot.data ?? 'system';
+                                        final modeText = mode == 'system'
+                                            ? 'Follow system'
+                                            : mode == 'light'
+                                                ? 'Light mode'
+                                                : 'Dark mode';
+                                        return Text(
+                                          modeText,
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurface.withOpacity(0.6),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.onSurface.withOpacity(0.4),
+                                    ),
+                                    onTap: () => _selectThemeMode(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            // Data Management Section
+                            _SettingsSection(
+                              title: 'Data Management',
+                              icon: Icons.storage_outlined,
+                              children: [
+                                Card(
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: colorScheme.outline.withOpacity(0.1),
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.primaryContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.backup_rounded,
+                                        color: colorScheme.onPrimaryContainer,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: const Text('Export Data'),
+                                    subtitle: Text(
+                                      'Backup all quotes, favorites, and settings',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurface.withOpacity(0.6),
+                                      ),
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.onSurface.withOpacity(0.4),
+                                    ),
+                                    onTap: () => _exportData(context),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Card(
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: colorScheme.outline.withOpacity(0.1),
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.secondaryContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.restore_rounded,
+                                        color: colorScheme.onSecondaryContainer,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: const Text('Import Data'),
+                                    subtitle: Text(
+                                      'Restore from a backup JSON file',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurface.withOpacity(0.6),
+                                      ),
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.onSurface.withOpacity(0.4),
+                                    ),
+                                    onTap: () => _importData(context),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Card(
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: colorScheme.error.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.errorContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: colorScheme.onErrorContainer,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      'Clear All Data',
+                                      style: TextStyle(
+                                        color: colorScheme.error,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      'Remove history, favorites, ratings, and cache',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurface.withOpacity(0.6),
+                                      ),
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.error,
+                                    ),
+                                    onTap: () => _clearUserData(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            // Account Section
+                            _SettingsSection(
+                              title: 'Account',
+                              icon: Icons.person_outline_rounded,
+                              children: [
+                                Card(
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: colorScheme.error.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.errorContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.logout_rounded,
+                                        color: colorScheme.onErrorContainer,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      'Sign Out',
+                                      style: TextStyle(
+                                        color: colorScheme.error,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      'Log out of your account',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurface.withOpacity(0.7),
+                                      ),
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.error,
+                                    ),
+                                    onTap: () => _logout(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            // App Info
+                            Center(
+                              child: Text(
+                                'Propelex v1.0.0',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface.withOpacity(0.7),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

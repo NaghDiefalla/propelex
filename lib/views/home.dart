@@ -1,3 +1,5 @@
+// lib/views/home.dart - REWRITTEN AND CORRECTED
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -6,6 +8,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart'; // <-- FIX: ADDED FOR RenderRepaintBoundary
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -20,9 +23,37 @@ import 'package:gal/gal.dart';
 import 'login.dart';
 import 'search.dart';
 import 'settings.dart';
+// NEW IMPORTS FOR NEW PAGES
+import 'favorites.dart';
+import 'history.dart';
+import 'rated_quotes.dart';
+
+
+// --- NEW ENUMS FOR IMAGE THEMES ---
+enum QuoteImageTheme {
+  modern,
+  elegant,
+  bold,
+  cinematic, 
+}
+
+extension QuoteImageThemeExtension on QuoteImageTheme {
+  String get name {
+    switch (this) {
+      case QuoteImageTheme.modern:
+        return 'Modern';
+      case QuoteImageTheme.elegant:
+        return 'Elegant';
+      case QuoteImageTheme.bold:
+        return 'Bold & Clean';
+      case QuoteImageTheme.cinematic:
+        return 'Cinematic';
+    }
+  }
+}
 
 class Quote {
-final String id;
+  final String id;
   final String content;
   final String author;
 
@@ -64,6 +95,9 @@ final String id;
 
   Map<String, dynamic> toJson() => {'_id': id, 'q': content, 'a': author};
 }
+
+// --- NEW ENUM FOR API SOURCES (copied from settings.dart for self-containment) ---
+enum QuoteApiSource { zenquotes, quotegarden, typefitLocal } 
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -119,6 +153,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
 
   bool get enableNotifications => _enableNotifications;
   List<Quote> get quoteHistory => _quoteHistory;
+  List<Quote> get favorites => _favorites; // NEW: Public getter for favorites
   Quote? get currentQuote => _currentQuote;
   Map<String, int> get quoteRatings => _quoteRatings;
 
@@ -204,9 +239,14 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     setState(() {});
   }
 
-  Future<void> _rateQuote(String id, int rating) async {
+  // NEW: Make rating function public/rename
+  Future<void> rateQuote(String id, int rating) async {
     final prefs = await SharedPreferences.getInstance();
-    _quoteRatings[id] = rating;
+    if (rating == 0) {
+      _quoteRatings.remove(id); // Remove rating if set to 0 (for "unrate" action)
+    } else {
+      _quoteRatings[id] = rating;
+    }
     await prefs.setString('quote_ratings', jsonEncode(_quoteRatings));
     setState(() {});
   }
@@ -361,6 +401,14 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     }
   }
 
+  // --- NEW: Public method for SettingsPage to reschedule notifications ---
+  Future<void> rescheduleNotification() async {
+    if (_enableNotifications && _currentQuote != null) {
+      await _scheduleNotification(_currentQuote!.content, _currentQuote!.author);
+    }
+  }
+  
+  // --- EXISTING: Notification Logic ---
   Future<bool> _requestExactAlarmPermission() async => (await Permission.scheduleExactAlarm.request()).isGranted;
 
   Future<void> _scheduleNotification(String quote, String author) async {
@@ -369,46 +417,34 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     final scheduled = _nextInstanceOfTime(_notificationTime);
     try {
       final useExact = await _requestExactAlarmPermission();
-      await _notificationsPlugin.zonedSchedule(_notificationId, 'Propelex', '$quote\n- $author', scheduled, details, androidScheduleMode: useExact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle, payload: 'daily_quote');
-    } catch (_) { _showError('Failed to schedule daily notification'); }
+      // FIX: Removed uiLocalNotificationDateInterpretation parameter to resolve undefined name/parameter error.
+      await _notificationsPlugin.zonedSchedule(
+        _notificationId, 
+        'Propelex', 
+        '$quote...\n${author.isNotEmpty ? '- $author' : ''}', 
+        scheduled, 
+        details, 
+        payload: 'daily_quote', 
+        androidScheduleMode: useExact 
+            ? AndroidScheduleMode.exactAllowWhileIdle 
+            : AndroidScheduleMode.alarmClock,
+      );
+    } catch (e) {
+      debugPrint('Notification scheduling error: $e');
+    }
   }
 
-  tz.TZDateTime _nextInstanceOfTime(String hhmm) {
+  tz.TZDateTime _nextInstanceOfTime(String time) {
     final now = tz.TZDateTime.now(tz.local);
-    final p = hhmm.split(':');
-    final t = tz.TZDateTime(tz.local, now.year, now.month, now.day, int.parse(p[0]), int.parse(p[1]));
-    return t.isBefore(now) ? t.add(const Duration(days: 1)) : t;
-  }
-
-  Future<void> rescheduleNotification() async {
-    if (_currentQuote != null) {
-      await _notificationsPlugin.cancel(_notificationId);
-      await _scheduleNotification(_currentQuote!.content, _currentQuote!.author);
+    final parts = time.split(':');
+    var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
+    return scheduledDate;
   }
-
-
-  Future<void> updateNotifications(bool value) async {
-    setState(() => _enableNotifications = value);
-    if (value) {
-      try {
-        final status = await Permission.notification.request();
-        if (!status.isGranted) {
-          if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notification permission denied'))); }
-          value = false;
-          setState(() => _enableNotifications = false);
-        }
-      } catch (_) {}
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('enable_notifications', value);
-    if (!value) {
-      await _notificationsPlugin.cancel(_notificationId);
-    } else if (_currentQuote != null) {
-      await _scheduleNotification(_currentQuote!.content, _currentQuote!.author);
-    }
-  }
-
+  
+  // --- EXISTING: Error and Dialog Logic ---
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -451,218 +487,434 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   }
 
   Future<void> _addCustomQuote() async {
-  final quoteController = TextEditingController();
-  final authorController = TextEditingController();
-  final formKey = GlobalKey<FormState>();
+    final quoteController = TextEditingController();
+    final authorController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
 
-  await showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
-      title: Row(
-        children: [
-          Icon(
-            Icons.add_circle_outline_rounded,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 12),
-          const Text('Add Custom Quote'),
-        ],
-      ),
-      
-      content: SingleChildScrollView( 
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: Form(
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.add_circle_outline_rounded,
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Add Custom Quote',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+        ),
+        content: Form(
           key: formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min, 
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Create your own inspirational quote',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
               TextFormField(
                 controller: quoteController,
-                maxLines: 4,
-                autofocus: true,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a quote';
-                  }
-                  return null;
-                },
-                decoration: InputDecoration(
-                  labelText: 'Quote',
-                  hintText: 'Enter your inspirational quote...',
-                  prefixIcon: Icon(
-                    Icons.format_quote_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                decoration: const InputDecoration(
+                  labelText: 'Quote Content',
+                  alignLabelWithHint: true,
                 ),
+                maxLines: 4,
+                validator: (value) => value!.trim().isEmpty ? 'Content cannot be empty' : null,
               ),
               const SizedBox(height: 16),
-              
               TextFormField(
                 controller: authorController,
-                textInputAction: TextInputAction.done,
-                decoration: InputDecoration(
-                  labelText: 'Author (optional)',
-                  hintText: 'Author name',
-                  prefixIcon: Icon(
-                    Icons.person_outline_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                decoration: const InputDecoration(
+                  labelText: 'Author (Optional)',
                 ),
+                validator: (value) => null,
               ),
-              
-              const SizedBox(height: 16), 
-              
             ],
           ),
         ),
-      ),
         actions: [
           TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          onPressed: () async {
-            if (!formKey.currentState!.validate()) return;
-            final q = quoteController.text.trim();
-            final a = authorController.text.trim().isEmpty ? 'Unknown' : authorController.text.trim();
-            final custom = Quote(id: DateTime.now().toIso8601String(), content: q, author: a);
-            final prefs = await SharedPreferences.getInstance();
-            setState(() {
-              _currentQuote = custom;
-              _quoteHistory.add(custom);
-            });
-            await prefs.setString('quote', jsonEncode(custom.toJson()));
-            await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
-            if (mounted) {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline_rounded,
-                        size: 20,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                      const SizedBox(width: 12),
-                      const Text('Custom quote added successfully'),
-                    ],
-                  ),
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  behavior: SnackBarBehavior.floating,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            }
-          },
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Add Quote'),
-        ),
-      ],
-    ),
-  );
-}
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                final newQuote = Quote(
+                  id: DateTime.now().microsecondsSinceEpoch.toString(),
+                  content: quoteController.text.trim(),
+                  author: authorController.text.trim().isEmpty ? 'Anonymous' : authorController.text.trim(),
+                );
+                Navigator.of(ctx).pop(newQuote);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    ).then((result) async {
+      if (result is Quote) {
+        final newQuote = result;
+        setState(() {
+          _currentQuote = newQuote;
+          _animationController.forward();
+        });
+        
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('quote', jsonEncode(newQuote.toJson()));
+        
+        if (!_quoteHistory.any((q) => q.id == newQuote.id)) {
+          _quoteHistory.add(newQuote);
+          if (_quoteHistory.length > 50) _quoteHistory.removeAt(0);
+          await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((q) => q.toJson()).toList()));
+        }
 
-  void _shareQuote() {
-      if (_currentQuote != null) {
-        final shareText = '${_currentQuote!.content}\n- ${_currentQuote!.author}';
-
-        SharePlus.instance.share(
-          ShareParams(
-            text: shareText,
-            subject: 'Propelex',
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 20),
+                SizedBox(width: 8),
+                Text('Custom quote added!'),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
           ),
         );
-        
-      } else {
-        _showError('No quote available to share');
       }
+    });
   }
 
-  Future<Uint8List?> _generateQuoteImageBytes(Quote quote) async {
-    final double width = 800;
-    final double height = 600;
-    final double padding = 40;
+  // NOTE: Image generation methods (_generateQuoteImageBytes, _saveImageToGallery)
+  // are omitted here for brevity but are assumed to be present and functional.
+   Future<Uint8List?> _generateQuoteImageBytes(Quote quote, BuildContext context, QuoteImageTheme theme) async {
+    final double width = 1080;
+    final double height = 1080;
+    final double innerPadding = 80;
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    final int backgroundHexColor = 0xFFFFFFFF;
+    // --- Theme-specific styles ---
+    ui.Color backgroundStartColor;
+    ui.Color backgroundEndColor;
+    ui.Color cardColor;
+    ui.Color primaryColor = ui.Color(cs.primary.value);
+    ui.Color onSurfaceColor = ui.Color(cs.onSurface.value);
 
+    TextStyle quoteStyle;
+    TextStyle authorStyle;
+    TextStyle brandingStyle;
+    TextStyle ctaStyle;
+    double quoteIconSize;
+    double separatorWidth;
+    double cardRadius;
+
+    switch (theme) {
+      case QuoteImageTheme.elegant:
+        backgroundStartColor = isDark ? const ui.Color(0xFF0F0F0F) : const ui.Color(0xFFFBFBFB);
+        backgroundEndColor = isDark ? const ui.Color(0xFF2E2E2E) : const ui.Color(0xFFFFFFFF);
+        cardColor = isDark ? const ui.Color(0xFF1A1A1A) : const ui.Color(0xFFFFFFFF);
+        primaryColor = ui.Color(isDark ? Colors.tealAccent.value : Colors.teal.shade700.value);
+        
+        quoteStyle = TextStyle(
+          color: onSurfaceColor, fontSize: 36, height: 1.5,
+          fontWeight: FontWeight.w300, fontStyle: FontStyle.italic,
+        );
+        authorStyle = TextStyle(
+          color: primaryColor, fontSize: 28, fontWeight: FontWeight.w600,
+          letterSpacing: 1.2,
+        );
+        brandingStyle = TextStyle(
+          color: primaryColor, fontSize: 20, fontWeight: FontWeight.w700,
+        );
+        ctaStyle = TextStyle(
+          color: onSurfaceColor.withOpacity(0.6), fontSize: 16, fontWeight: FontWeight.w400,
+        );
+        quoteIconSize = 100;
+        separatorWidth = 100;
+        cardRadius = 50;
+        break;
+
+      case QuoteImageTheme.bold:
+        backgroundStartColor = isDark ? const ui.Color(0xFF000000) : const ui.Color(0xFFFFFFFF);
+        backgroundEndColor = isDark ? const ui.Color(0xFF000000) : const ui.Color(0xFFFFFFFF);
+        cardColor = isDark ? primaryColor.withOpacity(0.15) : primaryColor.withOpacity(0.05);
+        onSurfaceColor = ui.Color(isDark ? Colors.white.value : Colors.black.value);
+        
+        quoteStyle = TextStyle(
+          color: onSurfaceColor, fontSize: 44, height: 1.2,
+          fontWeight: FontWeight.w900,
+        );
+        authorStyle = TextStyle(
+          color: primaryColor, fontSize: 24, fontWeight: FontWeight.w700,
+        );
+        brandingStyle = TextStyle(
+          color: onSurfaceColor.withOpacity(0.7), fontSize: 18, fontWeight: FontWeight.w400,
+        );
+        ctaStyle = TextStyle(
+          color: primaryColor, fontSize: 20, fontWeight: FontWeight.w700,
+        );
+        quoteIconSize = 0;
+        separatorWidth = 0;
+        cardRadius = 0;
+        break;
+        
+      case QuoteImageTheme.cinematic: // NEW CINEMATIC THEME
+        backgroundStartColor = const ui.Color(0xFF000000);
+        backgroundEndColor = const ui.Color(0xFF151515);
+        cardColor = const ui.Color(0x00000000); // Fully transparent card
+        onSurfaceColor = const ui.Color(0xFFFFFFFF);
+        primaryColor = ui.Color(isDark ? Colors.cyanAccent.value : Colors.teal.shade300.value);
+
+        quoteStyle = TextStyle(
+          color: onSurfaceColor, fontSize: 40, height: 1.6,
+          fontWeight: FontWeight.w200, // Light and airy font
+          letterSpacing: 1.5, // Wide letter spacing
+        );
+        authorStyle = TextStyle(
+          color: onSurfaceColor.withOpacity(0.7), fontSize: 20, fontWeight: FontWeight.w400,
+          fontStyle: FontStyle.italic,
+        );
+        brandingStyle = TextStyle(
+          color: onSurfaceColor.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.w400,
+        );
+        ctaStyle = TextStyle(
+          color: primaryColor.withOpacity(0.9), fontSize: 18, fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        );
+        quoteIconSize = 0; // No icon
+        separatorWidth = 0; // No separator
+        cardRadius = 0; // No radius
+        break;
+
+
+      case QuoteImageTheme.modern:
+      default:
+        backgroundStartColor = isDark ? const ui.Color(0xFF0A0A0A) : const ui.Color(0xFFF0F0F0);
+        backgroundEndColor = isDark ? const ui.Color(0xFF1E1E1E) : const ui.Color(0xFFFFFFFF);
+        cardColor = isDark ? const ui.Color(0xFF282828) : const ui.Color(0xFFFFFFFF);
+        
+        quoteStyle = TextStyle(
+          color: onSurfaceColor, fontSize: 38, height: 1.4,
+          fontWeight: FontWeight.w700, fontStyle: FontStyle.italic,
+        );
+        authorStyle = TextStyle(
+          color: onSurfaceColor.withOpacity(0.9), fontSize: 24, fontWeight: FontWeight.w500,
+          fontStyle: FontStyle.italic,
+        );
+        brandingStyle = TextStyle(
+          color: primaryColor, fontSize: 20, fontWeight: FontWeight.w700,
+        );
+        ctaStyle = TextStyle(
+          color: onSurfaceColor.withOpacity(0.6), fontSize: 16, fontWeight: FontWeight.w400,
+        );
+        quoteIconSize = 72;
+        separatorWidth = 80;
+        cardRadius = 30;
+        break;
+    }
+    
     final ui.PictureRecorder recorder = ui.PictureRecorder();
     final ui.Canvas canvas = ui.Canvas(recorder, Rect.fromLTWH(0, 0, width, height));
-
-    final Paint backgroundPaint = Paint()..color = const ui.Color(0xFFFFFFFF); 
+    
+    // --- 1. Draw Background (Radial Gradient) ---
+    final center = Offset(width / 2, height / 2);
+    final backgroundPaint = Paint()
+      ..shader = ui.Gradient.radial(
+        center, width * 0.7, [backgroundStartColor, backgroundEndColor], [0.0, 1.0], ui.TileMode.clamp,
+      );
     canvas.drawRect(Rect.fromLTWH(0, 0, width, height), backgroundPaint);
-
-    final quoteStyle = TextStyle(
-      color: const Color(0xFF000000),
-      fontSize: 32,
-      fontWeight: FontWeight.w600,
-    );
-
-    // 4. Draw Quote Content
-    final textPainter = TextPainter(
-      text: TextSpan(text: '“${quote.content}”', style: quoteStyle),
+    
+    // --- 2. Draw Card ---
+    final cardWidth = width * 0.85;
+    final cardHeight = height * 0.85;
+    final cardRect = Rect.fromLTWH((width - cardWidth) / 2, (height - cardHeight) / 2, cardWidth, cardHeight);
+    final RRect cardRRect = RRect.fromRectAndRadius(cardRect, Radius.circular(cardRadius));
+    
+    // Draw Subtle Box Shadow (Skip for Bold and Cinematic themes)
+    if (theme != QuoteImageTheme.bold && theme != QuoteImageTheme.cinematic) {
+      final shadowPaint = Paint()
+        ..color = isDark ? const ui.Color(0x80000000) : const ui.Color(0x30808080)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 20.0); 
+      canvas.drawRRect(cardRRect.shift(const Offset(0, 15)), shadowPaint); 
+    }
+    
+    // Draw main card (Skip filling the card background for Bold/Cinematic themes)
+    if (theme != QuoteImageTheme.bold && theme != QuoteImageTheme.cinematic) {
+        canvas.drawRRect(cardRRect, Paint()..color = cardColor);
+    } else if (theme == QuoteImageTheme.bold) {
+        // For Bold theme, draw a subtle border/outline
+        canvas.drawRRect(cardRRect, Paint()
+            ..color = primaryColor.withOpacity(0.2)
+            ..style = ui.PaintingStyle.stroke
+            ..strokeWidth = 3.0);
+    }
+    
+    // --- 3. Layout and Text Drawing with Improved Centering ---
+    final contentWidth = cardWidth - 2 * innerPadding;
+    
+    // 3a. Pre-Layout Text Painters to calculate required space
+    
+    // Quote Painter
+    final quotePainter = TextPainter(
+      text: TextSpan(text: quote.content, style: quoteStyle),
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
     );
+    quotePainter.layout(maxWidth: contentWidth);
     
-    textPainter.layout(maxWidth: width - 2 * padding);
-    
-    // Calculate center position
-    final quoteX = (width - textPainter.width) / 2;
-    final quoteY = (height - textPainter.height) / 2 - 40;
-    
-
-    textPainter.paint(canvas, Offset(quoteX, quoteY));
-
-    final authorStyle = TextStyle(
-      color: const Color(0xFF666666),
-      fontSize: 24,
-      fontStyle: FontStyle.italic,
-    );
-      
+    // Author Painter
+    final authorText = theme == QuoteImageTheme.elegant ? quote.author.toUpperCase() : '— ${quote.author}';
     final authorPainter = TextPainter(
-      text: TextSpan(text: '— ${quote.author}', style: authorStyle),
+      text: TextSpan(text: authorText, style: authorStyle),
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
     );
+    authorPainter.layout(maxWidth: contentWidth);
 
-    authorPainter.layout(maxWidth: width - 2 * padding);
+    // Quote Icon Painter (if applicable)
+    final quoteIconPainter = TextPainter(
+      text: TextSpan(
+        text: theme == QuoteImageTheme.elegant ? 'I' : '“', 
+        style: TextStyle(
+          color: primaryColor.withOpacity(0.6),
+          fontSize: quoteIconSize,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    if (quoteIconSize > 0) quoteIconPainter.layout();
 
-    final authorX = (width - authorPainter.width) / 2;
-    final authorY = quoteY + textPainter.height + 20;
+    // CTA Painter (Call to Action)
+    final ctaText = 'Get your daily inspiration: Propelex App';
+    final ctaPainter = TextPainter(
+      text: TextSpan(text: ctaText, style: ctaStyle),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+    ctaPainter.layout(maxWidth: contentWidth);
     
-    authorPainter.paint(canvas, Offset(authorX, authorY));
+    // 3b. Calculate Total Content Height (for centering)
+    double totalContentHeight = 0;
     
+    // 1. Icon Height (with overlap compensation)
+    if (quoteIconSize > 0) {
+        totalContentHeight += quoteIconPainter.height;
+        totalContentHeight -= (theme == QuoteImageTheme.elegant ? 40 : 20); 
+    }
+    
+    // 2. Quote Height
+    totalContentHeight += quotePainter.height;
+    
+    // 3. Spacing before Separator/Author
+    totalContentHeight += 40; 
+    
+    // 4. Separator Height (if applicable)
+    if (separatorWidth > 0) {
+        totalContentHeight += 4.0; // Separator height
+        totalContentHeight += 30; // Spacing after separator
+    }
+    
+    // 5. Author Height
+    totalContentHeight += authorPainter.height;
+    
+    // 6. Buffer/Spacing before CTA (fixed gap between author block and CTA)
+    totalContentHeight += 50; 
+    
+    // 7. CTA Height
+    totalContentHeight += ctaPainter.height;
+    
+    // 3c. Determine Starting Y coordinate for Centering
+    
+    // The total block (Icon -> CTA) is centered on the whole card area.
+    final cardCenterY = cardRect.top + cardHeight / 2;
+    double currentY = cardCenterY - totalContentHeight / 2;
+    
+    
+    // 3d. Draw Content based on calculated Y (Perfect Centering)
+    
+    // Draw Large Quote Icon (if size > 0)
+    if (quoteIconSize > 0) {
+      final iconX = cardRect.left + cardWidth / 2 - quoteIconPainter.width / 2;
+      quoteIconPainter.paint(canvas, Offset(iconX, currentY)); 
+      currentY += quoteIconPainter.height - (theme == QuoteImageTheme.elegant ? 40 : 20);
+    }
+
+    // Draw Quote Content
+    final quoteX = cardRect.left + innerPadding + (contentWidth - quotePainter.width) / 2;
+    quotePainter.paint(canvas, Offset(quoteX, currentY));
+    currentY += quotePainter.height + 40;
+
+    // Draw Separator (if width > 0)
+    if (separatorWidth > 0) {
+      final separatorHeight = 4.0;
+      final separatorRect = Rect.fromLTWH(cardRect.left + cardWidth / 2 - separatorWidth / 2, currentY, separatorWidth, separatorHeight);
+      canvas.drawRRect(RRect.fromRectAndRadius(separatorRect, const Radius.circular(2)), Paint()..color = primaryColor.withOpacity(0.8)); 
+      currentY += separatorHeight + 30;
+    }
+
+    // Draw Author
+    final authorX = cardRect.left + cardWidth / 2 - authorPainter.width / 2;
+    authorPainter.paint(canvas, Offset(authorX, currentY));
+    currentY += authorPainter.height + 50; // Add space for CTA
+
+    // --- 4. Draw Call-to-Action (CTA) Footer ---
+    final ctaX = cardRect.left + cardWidth / 2 - ctaPainter.width / 2;
+    ctaPainter.paint(canvas, Offset(ctaX, currentY));
+
+
+    // --- 5. Draw Watermark/Branding (Positioned outside the main card) ---
+    // The Watermark is now subtle and placed below the card for separation from the CTA.
+    final iconSize = 20.0;
+    final space = 10.0;
+    
+    final brandingPainter = TextPainter(
+      text: TextSpan(text: 'Propelex', style: brandingStyle),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+    brandingPainter.layout();
+
+    final brandingTotalWidth = iconSize + space + brandingPainter.width;
+    final brandingStartX = width / 2 - brandingTotalWidth / 2;
+    
+    // Calculate position in the margin between card bottom and total canvas bottom
+    final marginAreaY = (height - cardRect.bottom);
+    final brandingY = cardRect.bottom + (marginAreaY - brandingPainter.height) / 2;
+
+    // Draw Small Icon Placeholder
+    canvas.drawCircle(Offset(brandingStartX + iconSize / 2, brandingY + iconSize / 2), iconSize / 2, Paint()..color = primaryColor);
+
+    // Draw Text
+    brandingPainter.paint(canvas, Offset(brandingStartX + iconSize + space, brandingY));
+
+    // --- 6. Finalize and Return ---
     final ui.Image image = await recorder.endRecording().toImage(width.toInt(), height.toInt());
-    
     final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    
     return byteData?.buffer.asUint8List();
   }
 
-  Future<void> _saveQuoteToGallery() async {
+
+  Future<void> _saveImageToGallery() async {
     if (_currentQuote == null) {
       _showError('No quote available to save');
       return;
     }
+    
+    final selectedTheme = await _showImageOptions();
+    if (selectedTheme == null) return; // User cancelled
 
     Uint8List? bytes;
 
     try {
-      bytes = await _generateQuoteImageBytes(_currentQuote!);
+      bytes = await _generateQuoteImageBytes(_currentQuote!, context, selectedTheme);
 
       if (bytes == null) {
         _showError('Failed to generate quote image');
@@ -706,86 +958,80 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     }
   }
 
-  Future<void> _shareQuoteAsImage() async {
-    if (_currentQuote == null) {
-        _showError('No quote available to share');
-        return;
-      }
-      
-      Uint8List? bytes;
-      File? file;
-
-      try {
-        bytes = await _generateQuoteImageBytes(_currentQuote!); 
-        
-        if (bytes == null) {
-          _showError('Failed to generate quote image');
-          return;
-        }
-
-        final tempDir = await getTemporaryDirectory();
-        final fileName = 'propelex_quote_${DateTime.now().millisecondsSinceEpoch}.png';
-        file = File('${tempDir.path}/$fileName');
-        await file.writeAsBytes(bytes);
-
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'Propelex: Your daily dose of motivation!',
-          subject: 'Propelex Quote',
+  Future<QuoteImageTheme?> _showImageOptions() async { 
+    return await showModalBottomSheet<QuoteImageTheme>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Choose Image Style',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              // Use a list for selection
+              ...QuoteImageTheme.values.map((theme) {
+                IconData leadingIcon;
+                switch (theme) {
+                  case QuoteImageTheme.modern:
+                    leadingIcon = Icons.auto_awesome_rounded;
+                    break;
+                  case QuoteImageTheme.elegant:
+                    leadingIcon = Icons.brush_rounded;
+                    break;
+                  case QuoteImageTheme.bold:
+                    leadingIcon = Icons.flash_on_rounded;
+                    break;
+                  case QuoteImageTheme.cinematic:
+                    leadingIcon = Icons.movie_filter_rounded;
+                    break;
+                }
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: Icon(leadingIcon),
+                    title: Text(theme.name),
+                    onTap: () => Navigator.pop(context, theme),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
         );
-        
-      } catch (e) {
-        debugPrint('Error sharing image: $e');
-        _showError('Failed to share quote as image');
-      } finally {
-        if (file != null && await file.exists()) {
-          await file.delete();
-        }
-      }
+      },
+    );
   }
 
-  // Future<void> _quickSetNotificationTime() async {
-  //   final prefs = await SharedPreferences.getInstance();
-  //   final saved = prefs.getString('notification_time') ?? '08:00';
-  //   final initial = TimeOfDay(
-  //     hour: int.parse(saved.split(':')[0]),
-  //     minute: int.parse(saved.split(':')[1]),
-  //   );
-  //   final picked = await showTimePicker(context: context, initialTime: initial);
-  //   if (picked != null) {
-  //     final s = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-  //     await prefs.setString('notification_time', s);
-  //     await rescheduleNotification();
-  //     if (!mounted) return;
-  //     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Notification time set: $s')));
-  //   }
-  // }
-
-  void _copyQuote() {
+  void _shareAsText() {
     if (_currentQuote != null) {
-      Clipboard.setData(ClipboardData(text: '${_currentQuote!.content}\n- ${_currentQuote!.author}'));
+      Share.share('${_currentQuote!.content} — ${_currentQuote!.author}\n\n#PropelexQuotes');
+    } else {
+      _showError('No quote available to share');
+    }
+  }
+
+  void _copyToClipboard() {
+    if (_currentQuote != null) {
+      Clipboard.setData(ClipboardData(text: '${_currentQuote!.content} — ${_currentQuote!.author}'));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              Icon(
-                Icons.check_circle_outline_rounded,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Quote copied to clipboard',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Icon(Icons.content_copy_rounded, color: Colors.blueGrey, size: 20),
+              SizedBox(width: 8),
+              Text('Quote copied to clipboard!'),
             ],
           ),
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
         ),
       );
     } else {
@@ -804,542 +1050,100 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     await prefs.setString('favorites', jsonEncode(_favorites.map((q) => q.toJson()).toList()));
     setState(() {});
   }
-
-  void _showQuoteHistory() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.history_rounded,
-                    color: colorScheme.primary,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Quote History',
-                    style: textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${_quoteHistory.length} quotes',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // List
-            Expanded(
-              child: _quoteHistory.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.history_outlined,
-                      size: 64,
-                      color: colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No history yet',
-                      style: textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your quote history will appear here',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-                  : ListView.separated(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _quoteHistory.length,
-                separatorBuilder: (context, i) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final quote = _quoteHistory[_quoteHistory.length - 1 - index];
-                  final rating = _quoteRatings[quote.id];
-                  final isRated = rating != null && rating > 0;
-
-                  return Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: colorScheme.outline.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      title: Text(
-                        quote.content,
-                        style: textTheme.bodyMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '- ${quote.author}',
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                            if (isRated)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.star_rounded,
-                                      size: 14,
-                                      color: Colors.amber.shade700,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '$rating',
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: Colors.amber.shade900,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      trailing: IconButton(
-                        icon: Icon(
-                          Icons.delete_outline_rounded,
-                          color: colorScheme.error,
-                        ),
-                        onPressed: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          _quoteHistory.removeWhere((q) => q.id == quote.id);
-                          await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
-                          setState(() {});
-                        },
-                        tooltip: 'Remove from history',
-                      ),
-                      onTap: () {
-                        setCurrentQuote(quote);
-                        Navigator.pop(context);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  
+  // NEW: Public method for other pages to remove a favorite
+  Future<void> removeFavorite(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _favorites.removeWhere((q) => q.id == id);
+    });
+    await prefs.setString('favorites', jsonEncode(_favorites.map((q) => q.toJson()).toList()));
   }
 
-  void _showFavorites() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.favorite_rounded,
-                    color: Colors.red,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Favorites',
-                    style: textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${_favorites.length} quotes',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // List
-            Expanded(
-              child: _favorites.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.favorite_border_rounded,
-                      size: 64,
-                      color: colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No favorites yet',
-                      style: textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tap the heart icon to save quotes',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-                  : ListView.separated(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _favorites.length,
-                separatorBuilder: (context, i) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final quote = _favorites[_favorites.length - 1 - index];
-                  final rating = _quoteRatings[quote.id];
-                  final isRated = rating != null && rating > 0;
-
-                  return Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: colorScheme.outline.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: const Icon(
-                        Icons.favorite_rounded,
-                        color: Colors.red,
-                        size: 24,
-                      ),
-                      title: Text(
-                        quote.content,
-                        style: textTheme.bodyMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '- ${quote.author}',
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                            if (isRated)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.star_rounded,
-                                      size: 14,
-                                      color: Colors.amber.shade700,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '$rating',
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: Colors.amber.shade900,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      trailing: IconButton(
-                        icon: Icon(
-                          Icons.delete_outline_rounded,
-                          color: colorScheme.error,
-                        ),
-                        onPressed: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          _favorites.removeWhere((q) => q.id == quote.id);
-                          await prefs.setString('favorites', jsonEncode(_favorites.map((e) => e.toJson()).toList()));
-                          setState(() {});
-                        },
-                        tooltip: 'Remove from favorites',
-                      ),
-                      onTap: () {
-                        setCurrentQuote(quote);
-                        Navigator.pop(context);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  // NEW: Public method for other pages to remove a history item
+  Future<void> removeHistoryItem(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _quoteHistory.removeWhere((q) => q.id == id);
+      _quoteRatings.removeWhere((key, value) => key == id); // Also remove rating
+    });
+    await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
+    await prefs.setString('quote_ratings', jsonEncode(_quoteRatings));
   }
 
-  void _showRatedQuotes() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final ratedQuotes = _quoteHistory.where((q) => _quoteRatings.containsKey(q.id)).toList();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.star_rounded,
-                    color: Colors.amber.shade600,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Rated Quotes',
-                    style: textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${ratedQuotes.length} quotes',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // List
-            Expanded(
-              child: ratedQuotes.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.star_border_rounded,
-                      size: 64,
-                      color: colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No rated quotes yet',
-                      style: textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Rate quotes to see them here',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-                  : ListView.separated(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: ratedQuotes.length,
-                separatorBuilder: (context, i) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final quote = ratedQuotes[ratedQuotes.length - 1 - index];
-                  final rating = _quoteRatings[quote.id]!;
-
-                  return Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: colorScheme.outline.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.star_rounded,
-                              size: 16,
-                              color: Colors.amber.shade700,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$rating',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: Colors.amber.shade900,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      title: Text(
-                        quote.content,
-                        style: textTheme.bodyMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '- ${quote.author}',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurface.withValues(alpha: 0.7),
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ),
-                      onTap: () {
-                        setCurrentQuote(quote);
-                        Navigator.pop(context);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _handleMenuItemSelection(String value) {
+    switch (value) {
+      case 'refresh':
+        _getQuote();
+        break;
+      case 'favorites':
+        Get.to(() => FavoritesPage(homeState: this)); // Navigate to new page
+        break;
+      case 'history':
+        Get.to(() => HistoryPage(homeState: this)); // Navigate to new page
+        break;
+      case 'search':
+        Get.to(() => SearchPage(homeState: this));
+        break;
+      case 'rated':
+        Get.to(() => RatedQuotesPage(homeState: this)); // Navigate to new page
+        break;
+      case 'add':
+        _addCustomQuote();
+        break;
+      case 'settings':
+        Get.to(() => SettingsPage(homeState: this));
+        break;
+      case 'logout':
+        _logout();
+        break;
+    }
   }
 
   void setCurrentQuote(Quote quote) {
-    setState(() { _currentQuote = quote; _animationController..reset()..forward(); });
+    setState(() {
+      _currentQuote = quote;
+      _animationController..reset()..forward();
+    });
   }
-
+  
   @override
-  void dispose() { _animationController.dispose(); super.dispose(); }
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+  
+  // --- NEW: Quote Rating Widget (Extracted for cleaner build method) ---
+  Widget _buildRatingWidget(BuildContext context, int rating, String id) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final buttons = List.generate(5, (index) {
+      final starValue = index + 1;
+      final isRated = starValue <= rating;
+      return IconButton(
+        icon: Icon(
+          isRated ? Icons.star_rounded : Icons.star_border_rounded,
+          color: isRated ? Colors.amber.shade700 : colorScheme.onSurface.withOpacity(0.4),
+        ),
+        iconSize: 24,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        onPressed: () => rateQuote(id, starValue),
+        tooltip: '$starValue Star${starValue > 1 ? 's' : ''}',
+      );
+    });
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: buttons,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final isFavorite = _currentQuote != null && _favorites.any((q) => q.id == _currentQuote!.id);
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -1355,14 +1159,18 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                   Icon(
                     Icons.exit_to_app_rounded,
                     size: 18,
-                    color: Theme.of(context).colorScheme.onInverseSurface,
+                    color: Theme.of(context).colorScheme.onSecondaryContainer,
                   ),
                   const SizedBox(width: 8),
-                  const Text('Press back again to exit'),
+                  Text(
+                    'Press back again to exit',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSecondaryContainer),
+                  ),
                 ],
               ),
-              duration: const Duration(seconds: 2),
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
               behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
             ),
           );
         } else {
@@ -1370,580 +1178,317 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          child: Stack(
             children: [
-              const Text('Propelex'),
-              if (_streakCount > 0) ...[
-                const SizedBox(width: 12),
-                Text(
-                  '$_streakCount',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Add custom quote',
-              icon: const Icon(Icons.add_rounded, size: 20),
-              onPressed: _addCustomQuote,
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-                onSelected: (v) async {
-                  if (v == 'refresh') {
-                    _getQuote();
-                  }else if (v == 'settings') {
-                  Get.to(() => SettingsPage(homeState: this));
-                } else if (v == 'favorites') {
-                  _showFavorites();
-                } else if (v == 'history') {
-                  _showQuoteHistory();
-                } else if (v == 'search') {
-                  Get.to(() => SearchPage(homeState: this));
-                } else if (v == 'rated') {
-                  _showRatedQuotes();
-                } else if (v == 'about') {
-                  final colorScheme = Theme.of(context).colorScheme;
-                  
-                  showAboutDialog(
-                    context: context,
-                    applicationName: 'Propelex',
-                    applicationVersion: '1.0.0',
-                    applicationIcon: Icon(
-                      Icons.format_quote_rounded,
-                      size: 48,
-                      color: colorScheme.primary,
-                    ),
-                    applicationLegalese: '© 2026 New Dawn',
-                    
-                    children: <Widget>[
-                      const SizedBox(height: 12),
-                      Text(
-                        "An inspirational quotes app to brighten your day.",
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Text(
-                            "Made with ",
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          Icon(
-                            Icons.favorite,
-                            size: 16,
-                            color: colorScheme.error,
-                          ),
-                          Text(
-                            " by Nagh Diefalla",
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.7),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                } else if (v == 'logout') {
-                  await _logout();
-                }
-              },
-              itemBuilder: (c) => [
-                PopupMenuItem(
-                  value: 'refresh',
-                  child: Row(
-                    children: [
-                      Icon(Icons.refresh_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      const Text('Refresh'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'favorites',
-                  child: Row(
-                    children: [
-                      Icon(Icons.favorite_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      const Text('Favorites'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'history',
-                  child: Row(
-                    children: [
-                      Icon(Icons.history_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      const Text('History'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'search',
-                  child: Row(
-                    children: [
-                      Icon(Icons.search_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      const Text('Search Quotes'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'rated',
-                  child: Row(
-                    children: [
-                      Icon(Icons.star_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      const Text('Rated Quotes'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'settings',
-                  child: Row(
-                    children: [
-                      Icon(Icons.settings_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      const Text('Settings'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'about',
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 12),
-                      const Text('About'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'logout',
-                  child: Row(
-                    children: [
-                      Icon(Icons.logout_rounded, size: 20, color: Theme.of(context).colorScheme.error),
-                      const SizedBox(width: 12),
-                      Text('Logout', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: Container(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.black
-                    : Colors.white,
-              ),
-            ),
-            Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: MediaQuery.of(context).padding.top + 20,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 640),
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: RepaintBoundary(
-                      key: _quoteCardKey,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? const Color(0xFF404040)
-                                : const Color(0xFFE5E5E5),
-                            width: 1,
-                          ),
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFF171717)
-                              : Colors.white,
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Builder(
-                              builder: (ctx) {
-                                final content = _currentQuote?.content ?? '';
-                                double size = 26;
-                                if (content.length > 240) {
-                                  size = 16;
-                                } else if (content.length > 180) {
-                                  size = 18;
-                                } else if (content.length > 140) {
-                                  size = 20;
-                                } else if (content.length > 100) {
-                                  size = 22;
-                                }
-                                return _currentQuote != null
-                                    ? Semantics(
-                                  label: 'Quote text',
-                                  child: Text(
-                                    content,
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                      fontSize: size,
-                                      height: 1.5,
-                                      fontWeight: FontWeight.w400,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                )
-                                    : Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.format_quote_rounded,
-                                      size: 48,
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'No quote available',
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Tap the refresh button to get your daily inspiration',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            if (_currentQuote != null)
-                              Semantics(
-                                label: 'Quote author',
-                                child: Text(
-                                  _currentQuote!.author,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            if (_isOffline) ...[
-                              const SizedBox(height: 16),
-                              Text(
-                                'Offline',
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                ),
-                              ),
-                            ],
-                            if (_currentQuote != null) ...[
-                              const SizedBox(height: 32),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _MinimalIconButton(
-                                    icon: isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                    tooltip: isFavorite ? 'Remove from favorites' : 'Add to favorites',
-                                    isActive: isFavorite,
-                                    onPressed: _toggleFavorite,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  _MinimalIconButton(
-                                    icon: Icons.copy_rounded,
-                                    tooltip: 'Copy quote',
-                                    onPressed: _copyQuote,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  _MinimalIconButton(
-                                    icon: Icons.share_rounded,
-                                    tooltip: 'Share quote',
-                                    onPressed: _shareQuote,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  _MinimalIconButton(
-                                    icon: Icons.image_rounded,
-                                    tooltip: 'Share as image',
-                                    onPressed: _shareQuoteAsImage,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  _MinimalIconButton(
-                                    icon: Icons.download_rounded,
-                                    tooltip: 'Save Image to Gallery',
-                                    onPressed: _saveQuoteToGallery,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 24),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: List.generate(
-                                  5,
-                                      (i) => GestureDetector(
-                                    onTap: () => _rateQuote(_currentQuote!.id, i + 1),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                                      child: Icon(
-                                        i < (_quoteRatings[_currentQuote!.id] ?? 0)
-                                            ? Icons.star_rounded
-                                            : Icons.star_border_rounded,
-                                        size: 20,
-                                        color: Theme.of(context).brightness == Brightness.dark
-                                            ? Colors.white.withValues(alpha: i < (_quoteRatings[_currentQuote!.id] ?? 0) ? 1.0 : 0.3)
-                                            : Colors.black.withValues(alpha: i < (_quoteRatings[_currentQuote!.id] ?? 0) ? 1.0 : 0.3),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (_isLoading)
+              // Subtle background gradient (Consistent Design)
               Positioned.fill(
                 child: Container(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.black.withValues(alpha: 0.8)
-                      : Colors.white.withValues(alpha: 0.8),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white
-                          : Colors.black,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        colorScheme.primary.withOpacity(0.04),
+                        colorScheme.secondary.withOpacity(0.04),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                   ),
                 ),
               ),
-            Offstage(
-              offstage: true,
-              child: RepaintBoundary(
-                key: _exportCardKey,
-                child: Material(
-                  color: Colors.transparent,
-                  child: _buildExportCard(context),
+              
+              // Main Content: Constrained and Centered
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // --- TOP BAR: Logo/Title & Menu ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Propelex',
+                                  style: textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (_streakCount > 0)
+                                  Tooltip(
+                                    message: 'Daily Quote Streak',
+                                    child: Chip(
+                                      backgroundColor: colorScheme.tertiaryContainer,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      label: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.local_fire_department_rounded, size: 16, color: colorScheme.onTertiaryContainer),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '$_streakCount',
+                                            style: textTheme.labelLarge?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                              color: colorScheme.onTertiaryContainer,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            PopupMenuButton<String>(
+                              onSelected: _handleMenuItemSelection,
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'refresh',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.refresh_rounded, size: 20, color: colorScheme.primary),
+                                      const SizedBox(width: 12),
+                                      const Text('Refresh'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'favorites',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.favorite_rounded, size: 20, color: colorScheme.primary),
+                                      const SizedBox(width: 12),
+                                      const Text('Favorites'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'history',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.history_rounded, size: 20, color: colorScheme.primary),
+                                      const SizedBox(width: 12),
+                                      const Text('History'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'search',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.search_rounded, size: 20, color: colorScheme.primary),
+                                      const SizedBox(width: 12),
+                                      const Text('Search Quotes'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'rated',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.star_rounded, size: 20, color: colorScheme.primary),
+                                      const SizedBox(width: 12),
+                                      const Text('Rated Quotes'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'add',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.add_circle_outline_rounded, size: 20, color: colorScheme.primary),
+                                      const SizedBox(width: 12),
+                                      const Text('Add Custom Quote'),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuDivider(),
+                                PopupMenuItem(
+                                  value: 'settings',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.settings_rounded, size: 20, color: colorScheme.onSurface),
+                                      const SizedBox(width: 12),
+                                      const Text('Settings'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'logout',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.logout_rounded, size: 20, color: colorScheme.error),
+                                      const SizedBox(width: 12),
+                                      const Text('Logout'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              icon: Icon(Icons.more_vert_rounded, color: colorScheme.onBackground),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // --- Main Quote Card Area ---
+                        Expanded(
+                          child: Center(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // --- Quote Card ---
+                                  if (_currentQuote != null) 
+                                    FadeTransition(
+                                      opacity: _fadeAnimation,
+                                      child: RepaintBoundary(
+                                        key: _quoteCardKey,
+                                        child: _QuoteCard(
+                                          quote: _currentQuote!,
+                                          isOffline: _isOffline,
+                                          ratings: _quoteRatings,
+                                          onRate: rateQuote,
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    _buildLoadingOrPlaceholder(context),
+
+                                  const SizedBox(height: 24),
+
+                                  // --- Rating Stars ---
+                                  if (_currentQuote != null)
+                                    _buildRatingWidget(
+                                      context,
+                                      _quoteRatings[_currentQuote!.id] ?? 0,
+                                      _currentQuote!.id,
+                                    ),
+                                  
+                                  const SizedBox(height: 16),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        
+                        // --- Bottom Action Row ---
+                        if (_currentQuote != null)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _MinimalIconButton(
+                                icon: Icons.share_rounded,
+                                tooltip: 'Share',
+                                onPressed: _shareAsText,
+                              ),
+                              _MinimalIconButton(
+                                icon: Icons.image_rounded,
+                                tooltip: 'Save as Image',
+                                onPressed: _saveImageToGallery,
+                              ),
+                              _MinimalIconButton(
+                                icon: Icons.content_copy_rounded,
+                                tooltip: 'Copy',
+                                onPressed: _copyToClipboard,
+                              ),
+                              _MinimalIconButton(
+                                icon: isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                tooltip: isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+                                onPressed: _toggleFavorite,
+                                isActive: isFavorite,
+                              ),
+                              _MinimalIconButton(
+                                icon: Icons.navigate_next_rounded,
+                                tooltip: 'Next Quote',
+                                onPressed: _getQuote,
+                                isActive: true,
+                              ),
+                            ],
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 24.0),
+                            child: ElevatedButton.icon(
+                              onPressed: _getQuote,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Refresh'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+              
+              // Loading Overlay
+              if (_isLoading)
+                Container(
+                  color: colorScheme.surface.withOpacity(0.4),
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
 
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+              // Export Card RepaintBoundary (Hidden, only for image generation)
+              Positioned(
+                left: -1000,
+                top: -1000,
+                child: RepaintBoundary(
+                  key: _exportCardKey,
+                  child: SizedBox(
+                    width: 800,
+                    height: 800,
+                    child: Center(
+                      child: Text(_currentQuote?.content ?? 'Loading...', style: TextStyle(fontSize: 40)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // Branded export widget (offstage) for crisp image export with accent strip and watermark
-  // Widget _buildExportCard(BuildContext context) {
-  //   final quote = _currentQuote;
-  //   final cs = Theme.of(context).colorScheme;
-  //   final textTheme = Theme.of(context).textTheme;
-  //   return Container(
-  //     constraints: const BoxConstraints(maxWidth: 800),
-  //     padding: const EdgeInsets.all(32),
-  //     color: cs.surface.withValues(alpha: 0.02),
-  //     child: Container(
-  //       padding: const EdgeInsets.all(24),
-  //       decoration: BoxDecoration(
-  //         gradient: LinearGradient(
-  //           colors: [cs.primary.withValues(alpha: 0.18), cs.secondary.withValues(alpha: 0.18)],
-  //           begin: Alignment.topLeft,
-  //           end: Alignment.bottomRight,
-  //         ),
-  //         borderRadius: BorderRadius.circular(24),
-  //       ),
-  //       child: Stack(
-  //         children: [
-  //           // Acrylic overlay
-  //           Positioned.fill(
-  //             child: BackdropFilter(
-  //               filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-  //               child: DecoratedBox(
-  //                 decoration: BoxDecoration(
-  //                   color: cs.surface.withValues(alpha: 0.12),
-  //                   borderRadius: BorderRadius.circular(24),
-  //                   border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
-  //                 ),
-  //               ),
-  //             ),
-  //           ),
-  //           // Accent bar
-  //           Positioned(
-  //             left: 0,
-  //             top: 0,
-  //             bottom: 0,
-  //             child: Container(width: 6, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(6))),
-  //           ),
-  //           // Content
-  //           Padding(
-  //             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-  //             child: Column(
-  //               mainAxisSize: MainAxisSize.min,
-  //               crossAxisAlignment: CrossAxisAlignment.center,
-  //               children: [
-  //                 Icon(Icons.format_quote_rounded, size: 36, color: cs.primary),
-  //                 const SizedBox(height: 12),
-  //                 if (quote != null) ...[
-  //                   Text(
-  //                     quote.content,
-  //                     textAlign: TextAlign.center,
-  //                     style: textTheme.headlineSmall?.copyWith(height: 1.3, color: cs.onSurface),
-  //                   ),
-  //                   const SizedBox(height: 16),
-  //                   Text('- ${quote.author}', style: textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
-  //                 ] else ...[
-  //                   Text('No quote available', style: textTheme.titleMedium),
-  //                 ],
-  //                 const SizedBox(height: 24),
-  //                 // Watermark
-  //                 Align(
-  //                   alignment: Alignment.bottomRight,
-  //                   child: Row(
-  //                     mainAxisAlignment: MainAxisAlignment.end,
-  //                     children: [
-  //                       Icon(Icons.auto_awesome, size: 18, color: cs.onSurface.withValues(alpha: 0.6)),
-  //                       const SizedBox(width: 6),
-  //                       Text('Propelex', style: textTheme.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.6))),
-  //                     ],
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  Widget _buildExportCard(BuildContext context) {
-    final quote = _currentQuote;
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final double exportWidth = 800;
-    final double exportHeight = 600;
-
+  Widget _buildLoadingOrPlaceholder(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      width: exportWidth,
-      height: exportHeight,
-      padding: const EdgeInsets.all(24),
-      color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F7F7), // Light background color
-      child: Center(
-        child: Container(
-          width: exportWidth * 0.9,
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF282828) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: isDark ? Colors.black.withValues(alpha: 0.5) : Colors.grey.withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _isLoading
+              ? CircularProgressIndicator(color: colorScheme.primary)
+              : Icon(Icons.waving_hand_rounded, size: 48, color: colorScheme.primary),
+          const SizedBox(height: 16),
+          Text(
+            _isLoading ? 'Fetching inspiration...' : 'Welcome to Propelex!',
+            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 32,
-                color: cs.primary,
-              ),
-              const SizedBox(height: 24),
-              
-              if (quote != null) ...[
-                Text(
-                  '“${quote.content}”',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 28,
-                    height: 1.4,
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                Container(
-                  width: 60,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 30),
-                Text(
-                  '- ${quote.author}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w500,
-                    color: cs.onSurface.withValues(alpha: 0.8),
-                  ),
-                ),
-              ] else ...[
-                Text(
-                  'No quote available',
-                  style: TextStyle(fontSize: 24, color: cs.onSurface),
-                ),
-              ],
-              const Spacer(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 18,
-                    color: cs.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Propelex',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: cs.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            'Tap the refresh button to get your daily inspiration',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withOpacity(0.5),
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1982,9 +1527,79 @@ class _MinimalIconButton extends StatelessWidget {
               size: 20,
               color: isActive
                   ? color
-                  : color.withValues(alpha: 0.5),
+                  : color.withOpacity(0.5),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// Simplified Quote Card widget for the Home Page display
+class _QuoteCard extends StatelessWidget {
+  final Quote quote;
+  final bool isOffline;
+  final Map<String, int> ratings;
+  final Function(String, int) onRate;
+
+  const _QuoteCard({
+    required this.quote,
+    required this.isOffline,
+    required this.ratings,
+    required this.onRate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        constraints: const BoxConstraints(minHeight: 200),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Quote Content
+            Text(
+              '“${quote.content}”',
+              style: textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            // Author
+            Text(
+              '- ${quote.author}',
+              style: textTheme.titleMedium?.copyWith(
+                fontStyle: FontStyle.italic,
+                color: colorScheme.primary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            
+            // Optional: Offline indicator
+            if (isOffline) 
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  'Offline Mode',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.error,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
         ),
       ),
     );
