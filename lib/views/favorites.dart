@@ -134,7 +134,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                                           ? Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(
+                                                const Icon(
                                                   Icons.star_rounded, 
                                                   color: Colors.amber, 
                                                   size: 20

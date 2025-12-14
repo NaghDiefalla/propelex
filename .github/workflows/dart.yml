@@ -22,7 +22,7 @@ jobs:
       - name: Set up Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0' # Adjust to your required version
+          flutter-version: '3.22.0' # Adjust to your required version
           channel: 'stable'
       
       # 2. Use 'flutter pub get' for a Flutter project.

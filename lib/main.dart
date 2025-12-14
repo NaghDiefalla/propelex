@@ -4,17 +4,12 @@ import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart'; // Added for debugPrint
-
-// --- Imports for Controllers and Views ---
 import 'controllers/auth_controller.dart'; 
-import 'controllers/home_controller.dart'; // 🎯 NEW: Import HomeController
-import 'views/home.dart'; // 🎯 NEW: Import HomePage
-import 'views/login.dart'; // 🎯 NEW: Import LoginPage
+import 'controllers/home_controller.dart'; 
+import 'views/home.dart';
+import 'views/login.dart';
 import 'themes/app_theme.dart';
 
-// --- App Root Widget for Auth Routing ---
-// This widget listens to the AuthController's user state to determine the starting screen.
 class AppRoot extends StatelessWidget {
   const AppRoot({super.key});
 

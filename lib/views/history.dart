@@ -133,7 +133,7 @@ class _HistoryPageState extends State<HistoryPage> {
                                           ? Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(
+                                                const Icon(
                                                   Icons.star_rounded, 
                                                   color: Colors.amber, 
                                                   size: 20

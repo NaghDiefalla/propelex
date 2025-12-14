@@ -1,18 +1,13 @@
-// lib/views/home.dart - REWRITTEN AND CORRECTED
-
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart'; // <-- FIX: ADDED FOR RenderRepaintBoundary
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,13 +18,11 @@ import 'package:gal/gal.dart';
 import 'login.dart';
 import 'search.dart';
 import 'settings.dart';
-// NEW IMPORTS FOR NEW PAGES
 import 'favorites.dart';
 import 'history.dart';
 import 'rated_quotes.dart';
+import 'add_quote.dart';
 
-
-// --- NEW ENUMS FOR IMAGE THEMES ---
 enum QuoteImageTheme {
   modern,
   elegant,
@@ -59,12 +52,10 @@ class Quote {
 
   Quote({required this.id, required this.content, required this.author});
 
-  // --- COMPREHENSIVE FACTORY CONSTRUCTOR ---
   factory Quote.fromJson(Map<String, dynamic> json, {String source = 'zenquotes'}) {
     String? content;
     String? author;
 
-    // Determine parsing based on the expected source format
     if (source == QuoteApiSource.zenquotes.name) {
       // ZenQuotes format: [{"q": "content", "a": "author"}]
       content = json['q'] as String?;
@@ -79,11 +70,9 @@ class Quote {
       author = json['author'] as String?;
     }
 
-    // Fallback logic
     content ??= 'No quote available';
     author ??= 'Unknown';
 
-    // Ensure ID is unique, especially for quotes without an original ID
     final idValue = json['_id'] as String? ?? DateTime.now().microsecondsSinceEpoch.toString();
 
     return Quote(
@@ -96,7 +85,6 @@ class Quote {
   Map<String, dynamic> toJson() => {'_id': id, 'q': content, 'a': author};
 }
 
-// --- NEW ENUM FOR API SOURCES (copied from settings.dart for self-containment) ---
 enum QuoteApiSource { zenquotes, quotegarden, typefitLocal } 
 
 class HomePage extends StatefulWidget {
@@ -127,12 +115,10 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   static const _notificationChannelId = 'quote_channel';
   static const _notificationChannelName = 'Quote of the Day';
 
-  // --- NEW STATE VARIABLES FOR API MANAGEMENT ---
   String _currentApiSourceName = _defaultApiSource.name;
   String _currentApiSourceUrl = _zenQuotesUrl;
-  List<Quote>? _localTypefitQuotes; // Cache for local quotes
+  List<Quote>? _localTypefitQuotes;
 
-  // --- EXISTING STATE VARIABLES ---
   Quote? _currentQuote;
   bool _isLoading = false;
   final bool _isOffline = false;
@@ -153,7 +139,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
 
   bool get enableNotifications => _enableNotifications;
   List<Quote> get quoteHistory => _quoteHistory;
-  List<Quote> get favorites => _favorites; // NEW: Public getter for favorites
+  List<Quote> get favorites => _favorites;
   Quote? get currentQuote => _currentQuote;
   Map<String, int> get quoteRatings => _quoteRatings;
 
@@ -171,12 +157,11 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
       _initializeTimeZone(),
       _getSavedData(),
       _loadRatings(),
-      _loadApiSettings(), // NEW: Load API settings on startup
+      _loadApiSettings(),
       _updateStreak(),
     ]);
     final prefs = await SharedPreferences.getInstance();
     _notificationTime = prefs.getString('notification_time') ?? '08:00';
-    // Always load a fresh quote on launch
     await _getQuote();
   }
 
@@ -239,11 +224,10 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     setState(() {});
   }
 
-  // NEW: Make rating function public/rename
   Future<void> rateQuote(String id, int rating) async {
     final prefs = await SharedPreferences.getInstance();
     if (rating == 0) {
-      _quoteRatings.remove(id); // Remove rating if set to 0 (for "unrate" action)
+      _quoteRatings.remove(id);
     } else {
       _quoteRatings[id] = rating;
     }
@@ -251,25 +235,21 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     setState(() {});
   }
   
-  // --- NEW: API SETTINGS LOADING ---
   Future<void> _loadApiSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      // Restore saved API or use default
       _currentApiSourceName = prefs.getString('api_source_name') ?? _defaultApiSource.name;
       _currentApiSourceUrl = prefs.getString('api_source_url') ?? _zenQuotesUrl;
     });
 
-    // Pre-load the local JSON if Type.fit is the selected or default API
     if (_currentApiSourceName == QuoteApiSource.typefitLocal.name) {
       await _loadLocalTypefitQuotes();
     }
   }
 
-  // --- NEW: Local Type.fit Quote Loader ---
   Future<void> _loadLocalTypefitQuotes() async {
     try {
-      final jsonString = await rootBundle.loadString('assets/quotes.json'); // Assumes 'assets/quotes.json' exists
+      final jsonString = await rootBundle.loadString('assets/quotes.json'); 
       final List<dynamic> jsonList = jsonDecode(jsonString);
       _localTypefitQuotes = jsonList
           .map((e) => Quote.fromJson(e as Map<String, dynamic>, source: QuoteApiSource.typefitLocal.name))
@@ -289,13 +269,12 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     setState(() {
       _currentApiSourceName = name;
       _currentApiSourceUrl = url;
-      _localTypefitQuotes = null; // Clear cache
+      _localTypefitQuotes = null;
     });
 
     if (name == QuoteApiSource.typefitLocal.name) {
       await _loadLocalTypefitQuotes();
     }
-    // Fetch a new quote from the newly selected API
     await _getQuote();
   }
 
@@ -309,7 +288,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
       final currentUrl = _currentApiSourceUrl;
 
       if (currentSource == QuoteApiSource.typefitLocal.name) {
-        // --- 1. LOCAL QUOTE FETCHING ---
         if (_localTypefitQuotes == null || _localTypefitQuotes!.isEmpty) {
           await _loadLocalTypefitQuotes();
         }
@@ -321,16 +299,13 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
         }
 
       } else {
-        // --- 2. REMOTE API FETCHING ---
         final resp = await http.get(Uri.parse(currentUrl)).timeout(const Duration(seconds: 10), onTimeout: () => http.Response('timeout', 408));
 
         if (resp.statusCode != 200) {
           if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
-          // Fallback on HTTP error
           final fb = (_fallbackQuotes..shuffle()).first;
           newQuote = Quote.fromJson({'q': fb['q'], 'a': fb['a'], '_id': DateTime.now().toIso8601String()});
         } else {
-          // Attempt to parse the response
           dynamic data;
           try { data = jsonDecode(resp.body); } catch (_) {
             if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
@@ -338,7 +313,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
             return;
           }
 
-          // Normalize data structure for Quote.fromJson
           Map<String, dynamic> quoteJson;
 
           if (currentSource == QuoteApiSource.zenquotes.name) {
@@ -370,7 +344,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
         }
       }
 
-      // --- 3. FINAL PROCESSING ---
       if (newQuote != null && newQuote.content.isNotEmpty) {
         setState(() { _currentQuote = newQuote; _animationController.forward(); });
 
@@ -386,7 +359,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
 
         if (_enableNotifications) { await _scheduleNotification(newQuote.content, newQuote.author); }
       } else {
-        // If the newQuote is null or empty after all attempts (including fallback logic)
         if (retryCount < _maxRetries) { await Future.delayed(_retryDelay); return _getQuote(retryCount: retryCount + 1); }
         _showError('Could not fetch or parse any quote data.');
       }
@@ -401,14 +373,28 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     }
   }
 
-  // --- NEW: Public method for SettingsPage to reschedule notifications ---
+  Future<void> addCustomQuote(Quote newQuote) async {
+    setState(() {
+      _currentQuote = newQuote;
+      _animationController..reset()..forward();
+    });
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('quote', jsonEncode(newQuote.toJson()));
+    
+    if (!_quoteHistory.any((q) => q.id == newQuote.id)) {
+      _quoteHistory.add(newQuote);
+      if (_quoteHistory.length > 50) _quoteHistory.removeAt(0);
+      await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((q) => q.toJson()).toList()));
+    }
+  }
+
   Future<void> rescheduleNotification() async {
     if (_enableNotifications && _currentQuote != null) {
       await _scheduleNotification(_currentQuote!.content, _currentQuote!.author);
     }
   }
   
-  // --- EXISTING: Notification Logic ---
   Future<bool> _requestExactAlarmPermission() async => (await Permission.scheduleExactAlarm.request()).isGranted;
 
   Future<void> _scheduleNotification(String quote, String author) async {
@@ -417,7 +403,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     final scheduled = _nextInstanceOfTime(_notificationTime);
     try {
       final useExact = await _requestExactAlarmPermission();
-      // FIX: Removed uiLocalNotificationDateInterpretation parameter to resolve undefined name/parameter error.
       await _notificationsPlugin.zonedSchedule(
         _notificationId, 
         'Propelex', 
@@ -444,7 +429,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     return scheduledDate;
   }
   
-  // --- EXISTING: Error and Dialog Logic ---
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -486,121 +470,13 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     if (mounted) Get.offAll(() => const LoginPage());
   }
 
-  Future<void> _addCustomQuote() async {
-    final quoteController = TextEditingController();
-    final authorController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              Icons.add_circle_outline_rounded,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-              size: 24,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Add Custom Quote',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
-        ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: quoteController,
-                decoration: const InputDecoration(
-                  labelText: 'Quote Content',
-                  alignLabelWithHint: true,
-                ),
-                maxLines: 4,
-                validator: (value) => value!.trim().isEmpty ? 'Content cannot be empty' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: authorController,
-                decoration: const InputDecoration(
-                  labelText: 'Author (Optional)',
-                ),
-                validator: (value) => null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                final newQuote = Quote(
-                  id: DateTime.now().microsecondsSinceEpoch.toString(),
-                  content: quoteController.text.trim(),
-                  author: authorController.text.trim().isEmpty ? 'Anonymous' : authorController.text.trim(),
-                );
-                Navigator.of(ctx).pop(newQuote);
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    ).then((result) async {
-      if (result is Quote) {
-        final newQuote = result;
-        setState(() {
-          _currentQuote = newQuote;
-          _animationController.forward();
-        });
-        
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('quote', jsonEncode(newQuote.toJson()));
-        
-        if (!_quoteHistory.any((q) => q.id == newQuote.id)) {
-          _quoteHistory.add(newQuote);
-          if (_quoteHistory.length > 50) _quoteHistory.removeAt(0);
-          await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((q) => q.toJson()).toList()));
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 20),
-                SizedBox(width: 8),
-                Text('Custom quote added!'),
-              ],
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
-  }
-
-  // NOTE: Image generation methods (_generateQuoteImageBytes, _saveImageToGallery)
-  // are omitted here for brevity but are assumed to be present and functional.
-   Future<Uint8List?> _generateQuoteImageBytes(Quote quote, BuildContext context, QuoteImageTheme theme) async {
+  Future<Uint8List?> _generateQuoteImageBytes(Quote quote, BuildContext context, QuoteImageTheme theme) async {
     final double width = 1080;
     final double height = 1080;
     final double innerPadding = 80;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // --- Theme-specific styles ---
     ui.Color backgroundStartColor;
     ui.Color backgroundEndColor;
     ui.Color cardColor;
@@ -665,17 +541,17 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
         cardRadius = 0;
         break;
         
-      case QuoteImageTheme.cinematic: // NEW CINEMATIC THEME
+      case QuoteImageTheme.cinematic:
         backgroundStartColor = const ui.Color(0xFF000000);
         backgroundEndColor = const ui.Color(0xFF151515);
-        cardColor = const ui.Color(0x00000000); // Fully transparent card
+        cardColor = const ui.Color(0x00000000);
         onSurfaceColor = const ui.Color(0xFFFFFFFF);
         primaryColor = ui.Color(isDark ? Colors.cyanAccent.value : Colors.teal.shade300.value);
 
         quoteStyle = TextStyle(
           color: onSurfaceColor, fontSize: 40, height: 1.6,
-          fontWeight: FontWeight.w200, // Light and airy font
-          letterSpacing: 1.5, // Wide letter spacing
+          fontWeight: FontWeight.w200,
+          letterSpacing: 1.5,
         );
         authorStyle = TextStyle(
           color: onSurfaceColor.withOpacity(0.7), fontSize: 20, fontWeight: FontWeight.w400,
@@ -688,14 +564,13 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
           color: primaryColor.withOpacity(0.9), fontSize: 18, fontWeight: FontWeight.w600,
           letterSpacing: 0.5,
         );
-        quoteIconSize = 0; // No icon
-        separatorWidth = 0; // No separator
-        cardRadius = 0; // No radius
+        quoteIconSize = 0;
+        separatorWidth = 0;
+        cardRadius = 0;
         break;
 
 
       case QuoteImageTheme.modern:
-      default:
         backgroundStartColor = isDark ? const ui.Color(0xFF0A0A0A) : const ui.Color(0xFFF0F0F0);
         backgroundEndColor = isDark ? const ui.Color(0xFF1E1E1E) : const ui.Color(0xFFFFFFFF);
         cardColor = isDark ? const ui.Color(0xFF282828) : const ui.Color(0xFFFFFFFF);
@@ -723,7 +598,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     final ui.PictureRecorder recorder = ui.PictureRecorder();
     final ui.Canvas canvas = ui.Canvas(recorder, Rect.fromLTWH(0, 0, width, height));
     
-    // --- 1. Draw Background (Radial Gradient) ---
     final center = Offset(width / 2, height / 2);
     final backgroundPaint = Paint()
       ..shader = ui.Gradient.radial(
@@ -731,37 +605,29 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
       );
     canvas.drawRect(Rect.fromLTWH(0, 0, width, height), backgroundPaint);
     
-    // --- 2. Draw Card ---
     final cardWidth = width * 0.85;
     final cardHeight = height * 0.85;
     final cardRect = Rect.fromLTWH((width - cardWidth) / 2, (height - cardHeight) / 2, cardWidth, cardHeight);
     final RRect cardRRect = RRect.fromRectAndRadius(cardRect, Radius.circular(cardRadius));
     
-    // Draw Subtle Box Shadow (Skip for Bold and Cinematic themes)
     if (theme != QuoteImageTheme.bold && theme != QuoteImageTheme.cinematic) {
       final shadowPaint = Paint()
         ..color = isDark ? const ui.Color(0x80000000) : const ui.Color(0x30808080)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 20.0); 
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0); 
       canvas.drawRRect(cardRRect.shift(const Offset(0, 15)), shadowPaint); 
     }
     
-    // Draw main card (Skip filling the card background for Bold/Cinematic themes)
     if (theme != QuoteImageTheme.bold && theme != QuoteImageTheme.cinematic) {
         canvas.drawRRect(cardRRect, Paint()..color = cardColor);
     } else if (theme == QuoteImageTheme.bold) {
-        // For Bold theme, draw a subtle border/outline
         canvas.drawRRect(cardRRect, Paint()
             ..color = primaryColor.withOpacity(0.2)
             ..style = ui.PaintingStyle.stroke
             ..strokeWidth = 3.0);
     }
     
-    // --- 3. Layout and Text Drawing with Improved Centering ---
     final contentWidth = cardWidth - 2 * innerPadding;
     
-    // 3a. Pre-Layout Text Painters to calculate required space
-    
-    // Quote Painter
     final quotePainter = TextPainter(
       text: TextSpan(text: quote.content, style: quoteStyle),
       textAlign: TextAlign.center,
@@ -778,7 +644,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     );
     authorPainter.layout(maxWidth: contentWidth);
 
-    // Quote Icon Painter (if applicable)
     final quoteIconPainter = TextPainter(
       text: TextSpan(
         text: theme == QuoteImageTheme.elegant ? 'I' : '“', 
@@ -792,7 +657,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     );
     if (quoteIconSize > 0) quoteIconPainter.layout();
 
-    // CTA Painter (Call to Action)
     final ctaText = 'Get your daily inspiration: Propelex App';
     final ctaPainter = TextPainter(
       text: TextSpan(text: ctaText, style: ctaStyle),
@@ -801,58 +665,41 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     );
     ctaPainter.layout(maxWidth: contentWidth);
     
-    // 3b. Calculate Total Content Height (for centering)
     double totalContentHeight = 0;
     
-    // 1. Icon Height (with overlap compensation)
     if (quoteIconSize > 0) {
         totalContentHeight += quoteIconPainter.height;
         totalContentHeight -= (theme == QuoteImageTheme.elegant ? 40 : 20); 
     }
     
-    // 2. Quote Height
     totalContentHeight += quotePainter.height;
     
-    // 3. Spacing before Separator/Author
     totalContentHeight += 40; 
     
-    // 4. Separator Height (if applicable)
     if (separatorWidth > 0) {
-        totalContentHeight += 4.0; // Separator height
-        totalContentHeight += 30; // Spacing after separator
+        totalContentHeight += 4.0;
+        totalContentHeight += 30;
     }
     
-    // 5. Author Height
     totalContentHeight += authorPainter.height;
     
-    // 6. Buffer/Spacing before CTA (fixed gap between author block and CTA)
     totalContentHeight += 50; 
     
-    // 7. CTA Height
     totalContentHeight += ctaPainter.height;
     
-    // 3c. Determine Starting Y coordinate for Centering
-    
-    // The total block (Icon -> CTA) is centered on the whole card area.
     final cardCenterY = cardRect.top + cardHeight / 2;
     double currentY = cardCenterY - totalContentHeight / 2;
-    
-    
-    // 3d. Draw Content based on calculated Y (Perfect Centering)
-    
-    // Draw Large Quote Icon (if size > 0)
+  
     if (quoteIconSize > 0) {
       final iconX = cardRect.left + cardWidth / 2 - quoteIconPainter.width / 2;
       quoteIconPainter.paint(canvas, Offset(iconX, currentY)); 
       currentY += quoteIconPainter.height - (theme == QuoteImageTheme.elegant ? 40 : 20);
     }
 
-    // Draw Quote Content
     final quoteX = cardRect.left + innerPadding + (contentWidth - quotePainter.width) / 2;
     quotePainter.paint(canvas, Offset(quoteX, currentY));
     currentY += quotePainter.height + 40;
 
-    // Draw Separator (if width > 0)
     if (separatorWidth > 0) {
       final separatorHeight = 4.0;
       final separatorRect = Rect.fromLTWH(cardRect.left + cardWidth / 2 - separatorWidth / 2, currentY, separatorWidth, separatorHeight);
@@ -860,18 +707,13 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
       currentY += separatorHeight + 30;
     }
 
-    // Draw Author
     final authorX = cardRect.left + cardWidth / 2 - authorPainter.width / 2;
     authorPainter.paint(canvas, Offset(authorX, currentY));
-    currentY += authorPainter.height + 50; // Add space for CTA
+    currentY += authorPainter.height + 50; 
 
-    // --- 4. Draw Call-to-Action (CTA) Footer ---
     final ctaX = cardRect.left + cardWidth / 2 - ctaPainter.width / 2;
     ctaPainter.paint(canvas, Offset(ctaX, currentY));
 
-
-    // --- 5. Draw Watermark/Branding (Positioned outside the main card) ---
-    // The Watermark is now subtle and placed below the card for separation from the CTA.
     final iconSize = 20.0;
     final space = 10.0;
     
@@ -885,22 +727,17 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     final brandingTotalWidth = iconSize + space + brandingPainter.width;
     final brandingStartX = width / 2 - brandingTotalWidth / 2;
     
-    // Calculate position in the margin between card bottom and total canvas bottom
     final marginAreaY = (height - cardRect.bottom);
     final brandingY = cardRect.bottom + (marginAreaY - brandingPainter.height) / 2;
 
-    // Draw Small Icon Placeholder
     canvas.drawCircle(Offset(brandingStartX + iconSize / 2, brandingY + iconSize / 2), iconSize / 2, Paint()..color = primaryColor);
 
-    // Draw Text
     brandingPainter.paint(canvas, Offset(brandingStartX + iconSize + space, brandingY));
 
-    // --- 6. Finalize and Return ---
     final ui.Image image = await recorder.endRecording().toImage(width.toInt(), height.toInt());
     final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     return byteData?.buffer.asUint8List();
   }
-
 
   Future<void> _saveImageToGallery() async {
     if (_currentQuote == null) {
@@ -909,7 +746,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     }
     
     final selectedTheme = await _showImageOptions();
-    if (selectedTheme == null) return; // User cancelled
+    if (selectedTheme == null) return;
 
     Uint8List? bytes;
 
@@ -978,7 +815,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                     ),
               ),
               const SizedBox(height: 16),
-              // Use a list for selection
               ...QuoteImageTheme.values.map((theme) {
                 IconData leadingIcon;
                 switch (theme) {
@@ -1023,7 +859,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     if (_currentQuote != null) {
       Clipboard.setData(ClipboardData(text: '${_currentQuote!.content} — ${_currentQuote!.author}'));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Row(
             children: [
               Icon(Icons.content_copy_rounded, color: Colors.blueGrey, size: 20),
@@ -1051,7 +887,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     setState(() {});
   }
   
-  // NEW: Public method for other pages to remove a favorite
   Future<void> removeFavorite(String id) async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -1060,12 +895,11 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     await prefs.setString('favorites', jsonEncode(_favorites.map((q) => q.toJson()).toList()));
   }
 
-  // NEW: Public method for other pages to remove a history item
   Future<void> removeHistoryItem(String id) async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _quoteHistory.removeWhere((q) => q.id == id);
-      _quoteRatings.removeWhere((key, value) => key == id); // Also remove rating
+      _quoteRatings.removeWhere((key, value) => key == id);
     });
     await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
     await prefs.setString('quote_ratings', jsonEncode(_quoteRatings));
@@ -1077,19 +911,19 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
         _getQuote();
         break;
       case 'favorites':
-        Get.to(() => FavoritesPage(homeState: this)); // Navigate to new page
+        Get.to(() => FavoritesPage(homeState: this));
         break;
       case 'history':
-        Get.to(() => HistoryPage(homeState: this)); // Navigate to new page
+        Get.to(() => HistoryPage(homeState: this));
         break;
       case 'search':
         Get.to(() => SearchPage(homeState: this));
         break;
       case 'rated':
-        Get.to(() => RatedQuotesPage(homeState: this)); // Navigate to new page
+        Get.to(() => RatedQuotesPage(homeState: this));
         break;
       case 'add':
-        _addCustomQuote();
+        Get.to(() => AddQuotePage(homeState: this)); 
         break;
       case 'settings':
         Get.to(() => SettingsPage(homeState: this));
@@ -1113,7 +947,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     super.dispose();
   }
   
-  // --- NEW: Quote Rating Widget (Extracted for cleaner build method) ---
   Widget _buildRatingWidget(BuildContext context, int rating, String id) {
     final colorScheme = Theme.of(context).colorScheme;
     final buttons = List.generate(5, (index) {
@@ -1182,7 +1015,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
         body: SafeArea(
           child: Stack(
             children: [
-              // Subtle background gradient (Consistent Design)
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -1198,7 +1030,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 ),
               ),
               
-              // Main Content: Constrained and Centered
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
@@ -1207,7 +1038,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // --- TOP BAR: Logo/Title & Menu ---
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -1337,7 +1167,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                         ),
                         const SizedBox(height: 24),
                         
-                        // --- Main Quote Card Area ---
                         Expanded(
                           child: Center(
                             child: SingleChildScrollView(
@@ -1364,12 +1193,14 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
 
                                   const SizedBox(height: 24),
 
-                                  // --- Rating Stars ---
                                   if (_currentQuote != null)
-                                    _buildRatingWidget(
-                                      context,
-                                      _quoteRatings[_currentQuote!.id] ?? 0,
-                                      _currentQuote!.id,
+                                    FadeTransition(
+                                      opacity: _fadeAnimation,
+                                      child: _buildRatingWidget(
+                                        context,
+                                        _quoteRatings[_currentQuote!.id] ?? 0,
+                                        _currentQuote!.id,
+                                      ),
                                     ),
                                   
                                   const SizedBox(height: 16),
@@ -1379,7 +1210,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                           ),
                         ),
                         
-                        // --- Bottom Action Row ---
                         if (_currentQuote != null)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1437,7 +1267,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                   ),
                 ),
 
-              // Export Card RepaintBoundary (Hidden, only for image generation)
               Positioned(
                 left: -1000,
                 top: -1000,
@@ -1447,7 +1276,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                     width: 800,
                     height: 800,
                     child: Center(
-                      child: Text(_currentQuote?.content ?? 'Loading...', style: TextStyle(fontSize: 40)),
+                      child: Text(_currentQuote?.content ?? 'Loading...', style: const TextStyle(fontSize: 40)),
                     ),
                   ),
                 ),
@@ -1536,7 +1365,6 @@ class _MinimalIconButton extends StatelessWidget {
   }
 }
 
-// Simplified Quote Card widget for the Home Page display
 class _QuoteCard extends StatelessWidget {
   final Quote quote;
   final bool isOffline;
