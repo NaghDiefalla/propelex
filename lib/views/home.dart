@@ -29,10 +29,10 @@ class Quote {
   Quote({required this.id, required this.content, required this.author});
 
   factory Quote.fromJson(Map<String, dynamic> json) => Quote(
-        id: json['_id'] as String? ?? DateTime.now().toIso8601String(),
-        content: json['q'] as String? ?? 'No quote available',
-        author: json['a'] as String? ?? 'Unknown',
-      );
+    id: json['_id'] as String? ?? DateTime.now().toIso8601String(),
+    content: json['q'] as String? ?? 'No quote available',
+    author: json['a'] as String? ?? 'Unknown',
+  );
 
   Map<String, dynamic> toJson() => {'_id': id, 'q': content, 'a': author};
 }
@@ -78,6 +78,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   late Animation<double> _fadeAnimation;
   final GlobalKey _quoteCardKey = GlobalKey();
   final GlobalKey _exportCardKey = GlobalKey();
+  bool _showExportWidget = false;
 
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
@@ -312,7 +313,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     final quoteController = TextEditingController();
     final authorController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    
+
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -338,8 +339,8 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
               Text(
                 'Create your own inspirational quote',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
               ),
               const SizedBox(height: 20),
               TextFormField(
@@ -576,7 +577,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   void _showQuoteHistory() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -632,120 +633,120 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
             Expanded(
               child: _quoteHistory.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.history_outlined,
-                            size: 64,
-                            color: colorScheme.onSurface.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No history yet',
-                            style: textTheme.titleMedium?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Your quote history will appear here',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        ],
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.history_outlined,
+                      size: 64,
+                      color: colorScheme.onSurface.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No history yet',
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
-                    )
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Your quote history will appear here',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              )
                   : ListView.separated(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _quoteHistory.length,
-                      separatorBuilder: (context, i) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final quote = _quoteHistory[_quoteHistory.length - 1 - index];
-                        final rating = _quoteRatings[quote.id];
-                        final isRated = rating != null && rating > 0;
-                        
-                        return Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: colorScheme.outline.withValues(alpha: 0.1),
-                            ),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            title: Text(
-                              quote.content,
-                              style: textTheme.bodyMedium,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '- ${quote.author}',
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isRated)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.star_rounded,
-                                            size: 14,
-                                            color: Colors.amber.shade700,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '$rating',
-                                            style: textTheme.labelSmall?.copyWith(
-                                              color: Colors.amber.shade900,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _quoteHistory.length,
+                separatorBuilder: (context, i) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final quote = _quoteHistory[_quoteHistory.length - 1 - index];
+                  final rating = _quoteRatings[quote.id];
+                  final isRated = rating != null && rating > 0;
+
+                  return Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      title: Text(
+                        quote.content,
+                        style: textTheme.bodyMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '- ${quote.author}',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface.withValues(alpha: 0.7),
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
                             ),
-                            trailing: IconButton(
-                              icon: Icon(
-                                Icons.delete_outline_rounded,
-                                color: colorScheme.error,
+                            if (isRated)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.star_rounded,
+                                      size: 14,
+                                      color: Colors.amber.shade700,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$rating',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: Colors.amber.shade900,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              onPressed: () async {
-                                final prefs = await SharedPreferences.getInstance();
-                                _quoteHistory.removeWhere((q) => q.id == quote.id);
-                                await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
-                                setState(() {});
-                              },
-                              tooltip: 'Remove from history',
-                            ),
-                            onTap: () {
-                              setCurrentQuote(quote);
-                              Navigator.pop(context);
-                            },
-                          ),
-                        );
+                          ],
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: colorScheme.error,
+                        ),
+                        onPressed: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          _quoteHistory.removeWhere((q) => q.id == quote.id);
+                          await prefs.setString('quote_history', jsonEncode(_quoteHistory.map((e) => e.toJson()).toList()));
+                          setState(() {});
+                        },
+                        tooltip: 'Remove from history',
+                      ),
+                      onTap: () {
+                        setCurrentQuote(quote);
+                        Navigator.pop(context);
                       },
                     ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -756,7 +757,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   void _showFavorites() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -812,125 +813,125 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
             Expanded(
               child: _favorites.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.favorite_border_rounded,
-                            size: 64,
-                            color: colorScheme.onSurface.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No favorites yet',
-                            style: textTheme.titleMedium?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap the heart icon to save quotes',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        ],
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.favorite_border_rounded,
+                      size: 64,
+                      color: colorScheme.onSurface.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No favorites yet',
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
-                    )
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tap the heart icon to save quotes',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              )
                   : ListView.separated(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _favorites.length,
-                      separatorBuilder: (context, i) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final quote = _favorites[_favorites.length - 1 - index];
-                        final rating = _quoteRatings[quote.id];
-                        final isRated = rating != null && rating > 0;
-                        
-                        return Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: colorScheme.outline.withValues(alpha: 0.1),
-                            ),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            leading: Icon(
-                              Icons.favorite_rounded,
-                              color: Colors.red,
-                              size: 24,
-                            ),
-                            title: Text(
-                              quote.content,
-                              style: textTheme.bodyMedium,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '- ${quote.author}',
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isRated)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.star_rounded,
-                                            size: 14,
-                                            color: Colors.amber.shade700,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '$rating',
-                                            style: textTheme.labelSmall?.copyWith(
-                                              color: Colors.amber.shade900,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _favorites.length,
+                separatorBuilder: (context, i) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final quote = _favorites[_favorites.length - 1 - index];
+                  final rating = _quoteRatings[quote.id];
+                  final isRated = rating != null && rating > 0;
+
+                  return Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      leading: Icon(
+                        Icons.favorite_rounded,
+                        color: Colors.red,
+                        size: 24,
+                      ),
+                      title: Text(
+                        quote.content,
+                        style: textTheme.bodyMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '- ${quote.author}',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface.withValues(alpha: 0.7),
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
                             ),
-                            trailing: IconButton(
-                              icon: Icon(
-                                Icons.delete_outline_rounded,
-                                color: colorScheme.error,
+                            if (isRated)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.star_rounded,
+                                      size: 14,
+                                      color: Colors.amber.shade700,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$rating',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: Colors.amber.shade900,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              onPressed: () async {
-                                final prefs = await SharedPreferences.getInstance();
-                                _favorites.removeWhere((q) => q.id == quote.id);
-                                await prefs.setString('favorites', jsonEncode(_favorites.map((e) => e.toJson()).toList()));
-                                setState(() {});
-                              },
-                              tooltip: 'Remove from favorites',
-                            ),
-                            onTap: () {
-                              setCurrentQuote(quote);
-                              Navigator.pop(context);
-                            },
-                          ),
-                        );
+                          ],
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: colorScheme.error,
+                        ),
+                        onPressed: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          _favorites.removeWhere((q) => q.id == quote.id);
+                          await prefs.setString('favorites', jsonEncode(_favorites.map((e) => e.toJson()).toList()));
+                          setState(() {});
+                        },
+                        tooltip: 'Remove from favorites',
+                      ),
+                      onTap: () {
+                        setCurrentQuote(quote);
+                        Navigator.pop(context);
                       },
                     ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -942,7 +943,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final ratedQuotes = _quoteHistory.where((q) => _quoteRatings.containsKey(q.id)).toList();
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -998,99 +999,99 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
             Expanded(
               child: ratedQuotes.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.star_border_rounded,
-                            size: 64,
-                            color: colorScheme.onSurface.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No rated quotes yet',
-                            style: textTheme.titleMedium?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Rate quotes to see them here',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        ],
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.star_border_rounded,
+                      size: 64,
+                      color: colorScheme.onSurface.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No rated quotes yet',
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
-                    )
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Rate quotes to see them here',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              )
                   : ListView.separated(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: ratedQuotes.length,
-                      separatorBuilder: (context, i) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final quote = ratedQuotes[ratedQuotes.length - 1 - index];
-                        final rating = _quoteRatings[quote.id]!;
-                        
-                        return Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: colorScheme.outline.withValues(alpha: 0.1),
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: ratedQuotes.length,
+                separatorBuilder: (context, i) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final quote = ratedQuotes[ratedQuotes.length - 1 - index];
+                  final rating = _quoteRatings[quote.id]!;
+
+                  return Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.star_rounded,
+                              size: 16,
+                              color: Colors.amber.shade700,
                             ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$rating',
+                              style: textTheme.labelSmall?.copyWith(
+                                color: Colors.amber.shade900,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      title: Text(
+                        quote.content,
+                        style: textTheme.bodyMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '- ${quote.author}',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.7),
+                            fontStyle: FontStyle.italic,
                           ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.star_rounded,
-                                    size: 16,
-                                    color: Colors.amber.shade700,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '$rating',
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: Colors.amber.shade900,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            title: Text(
-                              quote.content,
-                              style: textTheme.bodyMedium,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                '- ${quote.author}',
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                            onTap: () {
-                              setCurrentQuote(quote);
-                              Navigator.pop(context);
-                            },
-                          ),
-                        );
+                        ),
+                      ),
+                      onTap: () {
+                        setCurrentQuote(quote);
+                        Navigator.pop(context);
                       },
                     ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -1148,9 +1149,9 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 Text(
                   '$_streakCount',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                        fontWeight: FontWeight.w500,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ],
@@ -1166,8 +1167,10 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              onSelected: (v) async {
-                if (v == 'settings') {
+                onSelected: (v) async {
+                  if (v == 'refresh') {
+                    _getQuote();
+                  }else if (v == 'settings') {
                   Get.to(() => SettingsPage(homeState: this));
                 } else if (v == 'favorites') {
                   _showFavorites();
@@ -1193,6 +1196,16 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 }
               },
               itemBuilder: (c) => [
+                PopupMenuItem(
+                  value: 'refresh',
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 12),
+                      const Text('Refresh'),
+                    ],
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'favorites',
                   child: Row(
@@ -1308,61 +1321,61 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                              Builder(
-                                builder: (ctx) {
-                                  final content = _currentQuote?.content ?? '';
-                                  double size = 26;
-                                  if (content.length > 240) {
-                                    size = 16;
-                                  } else if (content.length > 180) {
-                                    size = 18;
-                                  } else if (content.length > 140) {
-                                    size = 20;
-                                  } else if (content.length > 100) {
-                                    size = 22;
-                                  }
-                                  return _currentQuote != null
-                                      ? Semantics(
-                                          label: 'Quote text',
-                                          child: Text(
-                                            content,
-                                            textAlign: TextAlign.center,
-                                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                                  fontSize: size,
-                                                  height: 1.5,
-                                                  fontWeight: FontWeight.w400,
-                                                  letterSpacing: -0.2,
-                                                ),
-                                          ),
-                                        )
-                                      : Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.format_quote_rounded,
-                                              size: 48,
-                                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Text(
-                                              'No quote available',
-                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                                                  ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              'Tap the refresh button to get your daily inspiration',
-                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                                  ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
-                                        );
-                                },
-                              ),
+                            Builder(
+                              builder: (ctx) {
+                                final content = _currentQuote?.content ?? '';
+                                double size = 26;
+                                if (content.length > 240) {
+                                  size = 16;
+                                } else if (content.length > 180) {
+                                  size = 18;
+                                } else if (content.length > 140) {
+                                  size = 20;
+                                } else if (content.length > 100) {
+                                  size = 22;
+                                }
+                                return _currentQuote != null
+                                    ? Semantics(
+                                  label: 'Quote text',
+                                  child: Text(
+                                    content,
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                      fontSize: size,
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                )
+                                    : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.format_quote_rounded,
+                                      size: 48,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No quote available',
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Tap the refresh button to get your daily inspiration',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                             const SizedBox(height: 24),
                             if (_currentQuote != null)
                               Semantics(
@@ -1370,9 +1383,9 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                                 child: Text(
                                   _currentQuote!.author,
                                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                   textAlign: TextAlign.center,
                                 ),
                               ),
@@ -1381,8 +1394,8 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                               Text(
                                 'Offline',
                                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                    ),
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                ),
                               ),
                             ],
                             if (_currentQuote != null) ...[
@@ -1423,7 +1436,7 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: List.generate(
                                   5,
-                                  (i) => GestureDetector(
+                                      (i) => GestureDetector(
                                     onTap: () => _rateQuote(_currentQuote!.id, i + 1),
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -1441,13 +1454,13 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                                 ),
                               ),
                             ],
-                            ],
-                          ),
+                          ],
                         ),
                       ),
                     ),
                   ),
                 ),
+              ),
             ),
             if (_isLoading)
               Positioned.fill(
@@ -1464,77 +1477,20 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                   ),
                 ),
               ),
-            // Offstage export widget for high-DPI branded image capture
+            // export widget for high-DPI branded image capture
             Offstage(
-              offstage: true,
-              child: Center(
-                child: RepaintBoundary(
-                  key: _exportCardKey,
+              offstage: true, // مخفية لكن مرسومة
+              child: RepaintBoundary(
+                key: _exportCardKey,
+                child: Material(
+                  color: Colors.transparent,
                   child: _buildExportCard(context),
                 ),
               ),
             ),
           ],
         ),
-        floatingActionButton: SpeedDial(
-          icon: Icons.menu,
-          activeIcon: Icons.close,
-          spacing: 8,
-          spaceBetweenChildren: 8,
-          childPadding: const EdgeInsets.all(4),
-          children: [
-            SpeedDialChild(
-              child: const Icon(Icons.refresh),
-              label: 'Refresh',
-              onTap: _getQuote,
-            ),
-            SpeedDialChild(
-              child: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
-              label: isFavorite ? 'Unfavorite' : 'Favorite',
-              onTap: _toggleFavorite,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.copy),
-              label: 'Copy',
-              onTap: _copyQuote,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.share),
-              label: 'Share text',
-              onTap: _shareQuote,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.image),
-              label: 'Export image',
-              onTap: _onExportImage,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.add),
-              label: 'Add quote',
-              onTap: _addCustomQuote,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.timer),
-              label: 'Set time',
-              onTap: _quickSetNotificationTime,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.history),
-              label: 'History',
-              onTap: _showQuoteHistory,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.favorite),
-              label: 'Favorites',
-              onTap: _showFavorites,
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.search),
-              label: 'Search',
-              onTap: () => Get.to(() => SearchPage(homeState: this)),
-            ),
-          ],
-        ),
+
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
     );
@@ -1642,7 +1598,7 @@ class _MinimalIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final color = brightness == Brightness.dark ? Colors.white : Colors.black;
-    
+
     return Tooltip(
       message: tooltip,
       child: Material(
@@ -1655,7 +1611,7 @@ class _MinimalIconButton extends StatelessWidget {
             child: Icon(
               icon,
               size: 20,
-              color: isActive 
+              color: isActive
                   ? color
                   : color.withValues(alpha: 0.5),
             ),
