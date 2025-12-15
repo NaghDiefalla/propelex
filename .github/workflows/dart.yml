@@ -29,7 +29,8 @@ jobs:
           # 2. Add the pub cache bin to the PATH for the rest of this shell session
           echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
           # 3. Configure the FlutterFire project to generate firebase_options.dart
-          flutterfire configure --yes
+          # FIX: ADDING --project FLAG WITH YOUR PROJECT ID
+          flutterfire configure --yes --project propelex-1bc84
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
