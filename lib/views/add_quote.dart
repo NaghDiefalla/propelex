@@ -60,7 +60,6 @@ class AddQuotePageState extends State<AddQuotePage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Subtle background gradient (Identical Design)
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -76,7 +75,6 @@ class AddQuotePageState extends State<AddQuotePage> {
               ),
             ),
             
-            // Main Content Card
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
@@ -95,7 +93,6 @@ class AddQuotePageState extends State<AddQuotePage> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Header/Title
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -116,7 +113,6 @@ class AddQuotePageState extends State<AddQuotePage> {
                             ),
                             const SizedBox(height: 32),
 
-                            // Quote Content Field
                             TextFormField(
                               controller: quoteController,
                               decoration: InputDecoration(
@@ -138,7 +134,6 @@ class AddQuotePageState extends State<AddQuotePage> {
                             ),
                             const SizedBox(height: 24),
 
-                            // Author Field
                             TextFormField(
                               controller: authorController,
                               decoration: InputDecoration(
@@ -152,7 +147,6 @@ class AddQuotePageState extends State<AddQuotePage> {
                             ),
                             const SizedBox(height: 40),
 
-                            // Save Button
                             SizedBox(
                               height: 54,
                               child: ElevatedButton(
@@ -173,7 +167,6 @@ class AddQuotePageState extends State<AddQuotePage> {
                             ),
                             const SizedBox(height: 16),
                             
-                            // Back to Home link
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [

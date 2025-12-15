@@ -1,8 +1,6 @@
-// lib/views/rated_quotes.dart
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'home.dart'; // Import to access Quote class and HomePageState
+import 'home.dart';
 
 class RatedQuotesPage extends StatefulWidget {
   final HomePageState homeState;
@@ -14,7 +12,6 @@ class RatedQuotesPage extends StatefulWidget {
 }
 
 class _RatedQuotesPageState extends State<RatedQuotesPage> {
-  // Filters history based on ratings map from HomeState
   List<Quote> _ratedQuotes = [];
 
   @override
@@ -25,7 +22,6 @@ class _RatedQuotesPageState extends State<RatedQuotesPage> {
 
   void _filterRatedQuotes() {
     final ratings = widget.homeState.quoteRatings;
-    // Filter history to only include quotes with a rating, then reverse for newest first
     _ratedQuotes = widget.homeState.quoteHistory
         .where((q) => ratings.containsKey(q.id) && ratings[q.id]! > 0)
         .toList()
@@ -34,16 +30,13 @@ class _RatedQuotesPageState extends State<RatedQuotesPage> {
   }
 
   void _unrateQuote(Quote quote) async {
-    // Set rating to 0, which removes it from the internal map in homeState
     await widget.homeState.rateQuote(quote.id, 0); 
     
-    // 2. Update local state for UI refresh
     setState(() {
       _filterRatedQuotes();
     });
   }
   
-  // Helper to build the rating stars
   Widget _buildRatingStars(int rating, Color color, ColorScheme colorScheme, TextTheme textTheme) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -70,7 +63,6 @@ class _RatedQuotesPageState extends State<RatedQuotesPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     
-    // Ensure list is refreshed in case HomeState changed (e.g., from home page rating)
     _filterRatedQuotes();
 
     return Scaffold(
@@ -78,7 +70,6 @@ class _RatedQuotesPageState extends State<RatedQuotesPage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Subtle background gradient (Consistent Design)
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -94,7 +85,6 @@ class _RatedQuotesPageState extends State<RatedQuotesPage> {
               ),
             ),
             
-            // Main Content
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
@@ -103,7 +93,6 @@ class _RatedQuotesPageState extends State<RatedQuotesPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // --- Header (Back button + Title) ---
                       Row(
                         children: [
                           IconButton(
@@ -123,7 +112,6 @@ class _RatedQuotesPageState extends State<RatedQuotesPage> {
                       ),
                       const SizedBox(height: 16),
                       
-                      // --- List View Content ---
                       Expanded(
                         child: _ratedQuotes.isEmpty
                             ? Center(

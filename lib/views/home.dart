@@ -78,7 +78,7 @@ class Quote {
     return Quote(
       id: idValue,
       content: content.trim(),
-      author: author.replaceAll(', type.fit', '').trim().replaceAll(RegExp(r'\s+'), ' '), // Clean up Type.fit author
+      author: author.replaceAll(', type.fit', '').trim().replaceAll(RegExp(r'\s+'), ' '),
     );
   }
 
@@ -97,7 +97,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   static const _defaultApiSource = QuoteApiSource.zenquotes;
   static const _zenQuotesUrl = 'https://zenquotes.io/api/random';
   static const List<Map<String, String>> _fallbackQuotes = [
-    // ... (Your fallback quotes remain here)
     {'q': 'The only limit to our realization of tomorrow is our doubts of today.', 'a': 'Franklin D. Roosevelt'},
     {'q': 'In the middle of difficulty lies opportunity.', 'a': 'Albert Einstein'},
     {'q': 'What you get by achieving your goals is not as important as what you become by achieving your goals.', 'a': 'Zig Ziglar'},
@@ -636,7 +635,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
     );
     quotePainter.layout(maxWidth: contentWidth);
     
-    // Author Painter
     final authorText = theme == QuoteImageTheme.elegant ? quote.author.toUpperCase() : '— ${quote.author}';
     final authorPainter = TextPainter(
       text: TextSpan(text: authorText, style: authorStyle),
@@ -1086,16 +1084,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                               onSelected: _handleMenuItemSelection,
                               itemBuilder: (context) => [
                                 PopupMenuItem(
-                                  value: 'refresh',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.refresh_rounded, size: 20, color: colorScheme.primary),
-                                      const SizedBox(width: 12),
-                                      const Text('Refresh'),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
                                   value: 'favorites',
                                   child: Row(
                                     children: [
@@ -1180,7 +1168,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // --- Quote Card ---
                                   if (_currentQuote != null) 
                                     FadeTransition(
                                       opacity: _fadeAnimation,
@@ -1264,7 +1251,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
                 ),
               ),
               
-              // Loading Overlay
               if (_isLoading)
                 Container(
                   color: colorScheme.surface.withOpacity(0.4),
@@ -1329,7 +1315,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin 
   }
 }
 
-// Minimal icon button widget for clean UI
 class _MinimalIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -1401,7 +1386,6 @@ class _QuoteCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Quote Content
             Text(
               '“${quote.content}”',
               style: textTheme.headlineSmall?.copyWith(
@@ -1411,7 +1395,6 @@ class _QuoteCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            // Author
             Text(
               '- ${quote.author}',
               style: textTheme.titleMedium?.copyWith(
@@ -1421,19 +1404,31 @@ class _QuoteCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             
-            // Optional: Offline indicator
             if (isOffline) 
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Text(
-                  'Offline Mode',
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colorScheme.error,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-          ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.wifi_off_rounded,
+                      size: 16,
+                      color: colorScheme.error,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Offline Mode',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                )
+              )
+          ]
         ),
       ),
     );

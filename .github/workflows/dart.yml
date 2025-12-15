@@ -16,7 +16,7 @@ jobs:
       - name: Set up Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.5'
+          flutter-version: '3.38.5' 
           channel: 'stable'
       
       - name: Install dependencies
@@ -31,16 +31,12 @@ jobs:
       - name: Add Flutter Global Bin to PATH
         run: echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
 
-      # Configure FlutterFire and Generate Options
-      # FIX: Removed 'firebase use' and added '--token' directly to 'flutterfire configure'
       - name: Configure FlutterFire and Generate Options
         run: |
           flutterfire configure \
             --yes \
             --project propelex-1bc84 \
             --token ${{ secrets.FIREBASE_TOKEN }}
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Analyze project source
         run: flutter analyze

@@ -1,8 +1,6 @@
-// lib/views/history.dart
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'home.dart'; // Import to access Quote class and HomePageState
+import 'home.dart';
 
 class HistoryPage extends StatefulWidget {
   final HomePageState homeState;
@@ -14,7 +12,6 @@ class HistoryPage extends StatefulWidget {
 }
 
 class _HistoryPageState extends State<HistoryPage> {
-  // Local list to hold and display history (reversed for newest first)
   List<Quote> _history = [];
 
   @override
@@ -24,10 +21,8 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   void _removeHistoryItem(Quote quote) async {
-    // 1. Update the main Home State (which updates shared_prefs and removes rating)
     await widget.homeState.removeHistoryItem(quote.id);
     
-    // 2. Update local state for UI refresh
     setState(() {
       _history.removeWhere((q) => q.id == quote.id);
     });
@@ -38,7 +33,6 @@ class _HistoryPageState extends State<HistoryPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    // Refresh local list just in case it was modified on the home screen
     _history = List.from(widget.homeState.quoteHistory.reversed);
     
     return Scaffold(
@@ -46,7 +40,6 @@ class _HistoryPageState extends State<HistoryPage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Subtle background gradient (Consistent Design)
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -62,7 +55,6 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
             ),
             
-            // Main Content
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
@@ -71,7 +63,6 @@ class _HistoryPageState extends State<HistoryPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // --- Header (Back button + Title) ---
                       Row(
                         children: [
                           IconButton(
@@ -91,7 +82,6 @@ class _HistoryPageState extends State<HistoryPage> {
                       ),
                       const SizedBox(height: 16),
                       
-                      // --- List View Content ---
                       Expanded(
                         child: _history.isEmpty
                             ? Center(

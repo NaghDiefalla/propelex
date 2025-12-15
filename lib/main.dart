@@ -15,14 +15,9 @@ class AppRoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We can safely find the controller here because it was put() in main()
     final authController = Get.find<AuthController>();
 
-    // Obx reacts to changes in authController.user
     return Obx(() {
-      // NOTE: AuthController.onReady() handles navigation, but AppRoot ensures 
-      // the correct screen is shown immediately upon app launch before 
-      // the initial stream event fires Get.offAll().
       if (authController.user.value != null) {
         return const HomePage();
       } else {
@@ -40,9 +35,7 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
-  // 1. Inject AuthController (Required for Firebase login/state)
   Get.put(AuthController(), permanent: true);
-  // 2. 🎯 NEW: Inject HomeController (Required for quote logic/settings)
   Get.put(HomeController(), permanent: true);
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
@@ -78,7 +71,6 @@ void main() async {
 
   runZonedGuarded(() {
     runApp(GetMaterialApp(
-      // 3. 🎯 NEW: Set the home to the AppRoot to handle initial routing
       home: const AppRoot(), 
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
@@ -86,7 +78,6 @@ void main() async {
       themeMode: initialThemeMode,
     ));
   }, (error, stack) {
-    // Used debugPrint for better practice in production/release builds
     debugPrint('Uncaught error: $error\nStack trace: $stack');
   });
 }

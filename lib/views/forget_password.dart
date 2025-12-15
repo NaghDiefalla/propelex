@@ -1,5 +1,3 @@
-// lib/views/forget_password.dart
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
@@ -27,13 +25,11 @@ class ForgetPasswordPageState extends State<ForgetPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ❌ AppBar Removed
       resizeToAvoidBottomInset: true,
       body: Obx(
         () => SafeArea(
           child: Stack(
             children: [
-              // Subtle background gradient
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -59,14 +55,12 @@ class ForgetPasswordPageState extends State<ForgetPasswordPage> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: <Widget>[
                           const SizedBox(height: 12),
-                          // Title
                           Text(
                             'Reset Password',
                             style: Theme.of(context).textTheme.headlineLarge,
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 8),
-                          // Subtitle
                           Text(
                             'Enter your registered email below to receive a password reset link.',
                             textAlign: TextAlign.center,
@@ -74,7 +68,6 @@ class ForgetPasswordPageState extends State<ForgetPasswordPage> {
                           ),
                           const SizedBox(height: 48),
 
-                          // --- Email Field ---
                           TextFormField(
                             controller: emailController,
                             textInputAction: TextInputAction.done,
@@ -97,7 +90,6 @@ class ForgetPasswordPageState extends State<ForgetPasswordPage> {
                           ),
                           const SizedBox(height: 32),
 
-                          // Button
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton(
@@ -117,7 +109,6 @@ class ForgetPasswordPageState extends State<ForgetPasswordPage> {
                           ),
                           const SizedBox(height: 16),
                           
-                          // Back to Login link
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [

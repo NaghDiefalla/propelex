@@ -52,7 +52,7 @@ flutter_launcher_icons:
 dependency_overrides:
   http: ^1.5.0
   
-# The following section is specific to Flutter packages.
+
 flutter:
 
   uses-material-design: true

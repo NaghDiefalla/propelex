@@ -1,5 +1,3 @@
-// search.dart
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'home.dart';
@@ -34,12 +32,10 @@ class _SearchPageState extends State<SearchPage> {
     final hasFilter = _minRating > 0;
 
     return Scaffold(
-      // ❌ AppBar Removed (Consistent Design)
       resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Stack( // Consistent Design
+        child: Stack(
           children: [
-            // Subtle background gradient (Identical Design)
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -55,19 +51,16 @@ class _SearchPageState extends State<SearchPage> {
               ),
             ),
             
-            // Main Content: Search UI (Constrained)
-            Center( // Consistent Design
-              child: ConstrainedBox( // Consistent Design
+            Center(
+              child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12, left: 16, right: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // --- Search Bar and Filter Button (Replaces AppBar) ---
                       Row(
                         children: [
-                          // Back Button
                           IconButton(
                             icon: const Icon(Icons.arrow_back_rounded),
                             onPressed: () => Get.back(),
@@ -117,7 +110,6 @@ class _SearchPageState extends State<SearchPage> {
                           ),
                           const SizedBox(width: 8),
 
-                          // --- Filter Menu (Replaces AppBar.actions) ---
                           PopupMenuButton<int>(
                             icon: Container(
                               padding: const EdgeInsets.all(12),
@@ -154,7 +146,6 @@ class _SearchPageState extends State<SearchPage> {
                         ],
                       ),
 
-                      // --- Filter Chip (Moved from AppBar.actions) ---
                       if (hasFilter)
                         Container(
                           margin: const EdgeInsets.only(top: 8, right: 8),
@@ -184,7 +175,6 @@ class _SearchPageState extends State<SearchPage> {
                       
                       const SizedBox(height: 16),
 
-                      // --- Results Count/Info ---
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Row(
@@ -203,7 +193,6 @@ class _SearchPageState extends State<SearchPage> {
 
                       const SizedBox(height: 12),
 
-                      // --- Quotes List or Empty State ---
                       Expanded(
                         child: hasResults
                             ? ListView.separated(

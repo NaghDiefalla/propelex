@@ -1,5 +1,3 @@
-// lib/views/register.dart
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
@@ -34,13 +32,11 @@ class RegistrationPageState extends State<RegistrationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ❌ AppBar Removed
       resizeToAvoidBottomInset: true,
       body: Obx(
         () => SafeArea(
           child: Stack(
             children: [
-              // Subtle background gradient
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -79,7 +75,6 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           const SizedBox(height: 32),
 
-                          // --- 1. Email Field ---
                           TextFormField(
                             controller: emailController,
                             textInputAction: TextInputAction.next,
@@ -101,7 +96,6 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           const SizedBox(height: 20),
 
-                          // --- 2. Password Field ---
                           TextFormField(
                             controller: passwordController,
                             textInputAction: TextInputAction.next,
@@ -126,7 +120,6 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           const SizedBox(height: 20),
                           
-                          // --- 3. Confirm Password Field ---
                           TextFormField(
                             controller: confirmPasswordController,
                             textInputAction: TextInputAction.done,
@@ -153,7 +146,6 @@ class RegistrationPageState extends State<RegistrationPage> {
                           
                           const SizedBox(height: 24),
 
-                          // --- Register Button ---
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton(
@@ -173,7 +165,6 @@ class RegistrationPageState extends State<RegistrationPage> {
                           ),
                           const SizedBox(height: 16),
                           
-                          // --- Back to Login TextButton ---
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [

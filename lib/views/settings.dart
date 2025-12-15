@@ -1,5 +1,3 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -11,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'home.dart';
 import 'login.dart';
 
-// --- API Definitions ---
 enum QuoteApiSource { zenquotes, quotegarden, apininjas, typefitLocal }
 
 class ApiSource {
@@ -39,11 +36,10 @@ const List<ApiSource> availableApis = [
   ApiSource(
     QuoteApiSource.typefitLocal,
     'Local Quotes (Static File)',
-    'LOCAL_TYPEFIT', // Flag for local processing in home.dart
+    'LOCAL_TYPEFIT',
     'Uses a large local JSON file (Type.fit) for fast, reliable, and offline quotes.',
   ),
 ];
-// --- End API Definitions ---
 
 class SettingsPage extends StatelessWidget {
   final HomePageState homeState;
@@ -66,7 +62,6 @@ class SettingsPage extends StatelessWidget {
       await prefs.setString('notification_time', timeString);
       debugPrint('Notification time set: $timeString');
       if (homeState.enableNotifications && homeState.currentQuote != null) {
-        // Use the new public method
         await homeState.rescheduleNotification(); 
       }
       if (context.mounted) {
@@ -112,11 +107,9 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
   return _formatTime(context, timeString);
 }
 
-  // NOTE: _testNotification method has been omitted as it was commented out in the original.
 
   Future<void> _selectApiSource(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    // Default to 'zenquotes' if not set
     final currentApiName = prefs.getString('api_source_name') ?? QuoteApiSource.zenquotes.name;
 
     final selectedApi = await showDialog<ApiSource>(
@@ -138,7 +131,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
     );
 
     if (selectedApi != null) {
-      // Call the method in HomePageState to update the API, save prefs, and fetch a new quote
       await homeState.updateApiSource(selectedApi.id.name, selectedApi.url);
 
       if (context.mounted) {
@@ -222,8 +214,8 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
       'theme_mode': prefs.getString('theme_mode'),
       'is_logged_in': prefs.getBool('is_logged_in'),
       'username': prefs.getString('username'),
-      'api_source_name': prefs.getString('api_source_name'), // Export new API setting
-      'api_source_url': prefs.getString('api_source_url'),   // Export new API setting
+      'api_source_name': prefs.getString('api_source_name'),
+      'api_source_url': prefs.getString('api_source_url'),  
     };
     final tmp = await getTemporaryDirectory();
     final file = File('${tmp.path}/quotes_backup_${DateTime.now().millisecondsSinceEpoch}.json');
@@ -377,7 +369,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
       body: SafeArea(
         child: Stack(
           children: [
-            // Subtle background gradient (Consistent Design)
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -393,7 +384,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
               ),
             ),
             
-            // Main Content: Constrained and Centered
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
@@ -402,7 +392,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // --- Custom Header (Replaces AppBar) ---
                       Row(
                         children: [
                           IconButton(
@@ -422,12 +411,10 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                       ),
                       const SizedBox(height: 16),
                       
-                      // --- List View Content ---
                       Expanded(
                         child: ListView(
                           padding: EdgeInsets.zero,
                           children: [
-                            // --- New: API Source Section ---
                             _SettingsSection(
                               title: 'Quote Source',
                               icon: Icons.cloud_queue_rounded,
@@ -456,7 +443,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                                     title: const Text('Select Quote API'),
                                     subtitle: FutureBuilder<String>(
                                       future: SharedPreferences.getInstance().then(
-                                        // Default to zenquotes name
                                         (prefs) => prefs.getString('api_source_name') ?? QuoteApiSource.zenquotes.name,
                                       ),
                                       builder: (context, snapshot) {
@@ -483,9 +469,7 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                               ],
                             ),
                             const SizedBox(height: 32),
-                            // --- End API Source Section ---
                             
-                            // Notifications Section
                             _SettingsSection(
                               title: 'Notifications',
                               icon: Icons.notifications_outlined,
@@ -512,16 +496,13 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                                         size: 20,
                                       ),
                                     ),
-                                    title: const Text('Notification Time'), // More descriptive title
+                                    title: const Text('Notification Time'),
                                     subtitle: FutureBuilder<String>(
-                                      // Use the clean, dedicated function
                                       future: _getFormattedNotificationTime(context), 
                                       builder: (context, snapshot) {
-                                        // Show loading indicator or default value while waiting
                                         final timeText = snapshot.data ?? 'Loading...'; 
                                         
                                         return Text(
-                                          // Use the formatted string directly
                                           'Quote scheduled for $timeText',
                                           style: textTheme.bodySmall?.copyWith(
                                             color: colorScheme.onSurface.withOpacity(0.6),
@@ -537,11 +518,9 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                // Card (Test Notification) commented out as per original file state.
                               ],
                             ),
                             const SizedBox(height: 32),
-                            // Appearance Section
                             _SettingsSection(
                               title: 'Appearance',
                               icon: Icons.palette_outlined,
@@ -597,7 +576,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                               ],
                             ),
                             const SizedBox(height: 32),
-                            // Data Management Section
                             _SettingsSection(
                               title: 'Data Management',
                               icon: Icons.storage_outlined,
@@ -718,7 +696,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                               ],
                             ),
                             const SizedBox(height: 32),
-                            // Account Section
                             _SettingsSection(
                               title: 'Account',
                               icon: Icons.person_outline_rounded,
@@ -767,7 +744,6 @@ Future<String> _getFormattedNotificationTime(BuildContext context) async {
                               ],
                             ),
                             const SizedBox(height: 32),
-                            // App Info
                             Center(
                               child: Text(
                                 'Propelex v1.0.0',

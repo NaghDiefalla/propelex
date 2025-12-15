@@ -1,8 +1,6 @@
-// lib/views/favorites.dart
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'home.dart'; // Import to access Quote class and HomePageState
+import 'home.dart';
 
 class FavoritesPage extends StatefulWidget {
   final HomePageState homeState;
@@ -14,21 +12,17 @@ class FavoritesPage extends StatefulWidget {
 }
 
 class _FavoritesPageState extends State<FavoritesPage> {
-  // Local list to hold and display favorites
   List<Quote> _favorites = [];
 
   @override
   void initState() {
     super.initState();
-    // Initialize local list from main state
     _favorites = List.from(widget.homeState.favorites);
   }
 
   void _removeFavorite(Quote quote) async {
-    // 1. Update the main Home State (which updates shared_prefs and triggers Home page rebuild if necessary)
     await widget.homeState.removeFavorite(quote.id);
     
-    // 2. Update local state for UI refresh
     setState(() {
       _favorites.removeWhere((q) => q.id == quote.id);
     });
@@ -39,7 +33,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    // Refresh local list just in case it was modified on the home screen
     _favorites = List.from(widget.homeState.favorites); 
 
     return Scaffold(
@@ -47,7 +40,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Subtle background gradient (Consistent Design)
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -63,7 +55,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
               ),
             ),
             
-            // Main Content
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
@@ -72,7 +63,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // --- Header (Back button + Title) ---
                       Row(
                         children: [
                           IconButton(
@@ -91,8 +81,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
-                      // --- List View Content ---
                       Expanded(
                         child: _favorites.isEmpty
                             ? Center(

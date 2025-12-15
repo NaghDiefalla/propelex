@@ -1,5 +1,3 @@
-// lib/views/login.dart
-
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import '../controllers/auth_controller.dart'; 
@@ -33,13 +31,11 @@ class LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ❌ AppBar Removed
       resizeToAvoidBottomInset: true,
       body: Obx(
         () => SafeArea(
           child: Stack(
             children: [
-              // Subtle background gradient
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -65,14 +61,12 @@ class LoginPageState extends State<LoginPage> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: <Widget>[
                           const SizedBox(height: 12),
-                          // Title
                           Text(
                             'Welcome Back',
                             style: Theme.of(context).textTheme.headlineLarge,
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 8),
-                          // Subtitle
                           Text(
                             'Login to continue using Propelex',
                             style: Theme.of(context).textTheme.bodyMedium,
@@ -80,7 +74,6 @@ class LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 48),
 
-                          // --- Email Field ---
                           TextFormField(
                             controller: emailController,
                             textInputAction: TextInputAction.next,
@@ -102,7 +95,6 @@ class LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 20),
 
-                          // --- Password Field ---
                           TextFormField(
                             controller: passwordController,
                             textInputAction: TextInputAction.done,
@@ -127,7 +119,6 @@ class LoginPageState extends State<LoginPage> {
                             onFieldSubmitted: (_) => _attemptLogin(),
                           ),
                           
-                          // Forgot Password Link
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
@@ -137,7 +128,6 @@ class LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Button
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton(
@@ -157,7 +147,6 @@ class LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 16),
                           
-                          // Create account link
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
