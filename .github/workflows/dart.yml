@@ -22,18 +22,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Install FlutterFire CLI (The Fix for 'command not found')
-        run: flutter pub global activate flutterfire_cli
-
-      # Add the Flutter global bin directory to the PATH for flutterfire command
-      - name: Add Flutter Global Bin to PATH
-        run: echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
-
-      - name: Setup Firebase CLI (npm)
-        run: npm install -g firebase-tools
-
-      - name: Configure FlutterFire
-        run: flutterfire configure --yes
+      - name: Install & Configure FlutterFire
+        run: |
+          # 1. Activate the FlutterFire CLI tool
+          flutter pub global activate flutterfire_cli
+          # 2. Add the pub cache bin to the PATH for the rest of this shell session
+          echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
+          # 3. Configure the FlutterFire project to generate firebase_options.dart
+          flutterfire configure --yes
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
