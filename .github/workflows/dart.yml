@@ -22,14 +22,25 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Install & Configure FlutterFire
+      # Install the official Firebase CLI (required by FlutterFire CLI)
+      - name: Install Firebase CLI (npm)
+        run: npm install -g firebase-tools
+
+      # Install the FlutterFire CLI
+      - name: Install FlutterFire CLI
+        run: flutter pub global activate flutterfire_cli
+
+      # Add Flutter global bin to PATH for 'flutterfire' command 
+      - name: Add Flutter Global Bin to PATH
+        run: echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
+
+      # Configure FlutterFire and Generate Options
+      # This step authenticates the Firebase CLI and runs flutterfire configure
+      - name: Configure FlutterFire and Generate Options
         run: |
-          # 1. Activate the FlutterFire CLI tool
-          flutter pub global activate flutterfire_cli
-          # 2. Add the pub cache bin to the PATH for the rest of this shell session
-          echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
-          # 3. Configure the FlutterFire project to generate firebase_options.dart
-          # FIX: ADDING --project FLAG WITH YOUR PROJECT ID
+          # Log in to Firebase using the CI token and set the default project
+          firebase use --token ${{ secrets.FIREBASE_TOKEN }} propelex-1bc84
+          # Generate the files using the configured project, suppressing interactive prompts
           flutterfire configure --yes --project propelex-1bc84
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
