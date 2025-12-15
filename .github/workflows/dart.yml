@@ -36,6 +36,7 @@ jobs:
           flutterfire configure \
             --yes \
             --project propelex-1bc84 \
+            --platforms android \
             --token ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Analyze project source
